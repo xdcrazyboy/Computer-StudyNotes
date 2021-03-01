@@ -59,3 +59,95 @@
 
 ## Spring Cloud Eureka配置文件错误
 propertities文件，尽量用驼峰而不是service-url,应该是serviceUrl
+
+## 线程池写法
+
+- 定义线程池
+```java
+@SpringBootApplication
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+
+    @EnableAsync
+    @Configuration
+    class TaskPoolConfig {
+        @Bean("taskExecutor")
+        public Executor taskExecutor() {
+            ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+            executor.setCorePoolSize(10);
+            executor.setMaxPoolSize(20);
+            executor.setQueueCapacity(200);
+            executor.setKeepAliveSeconds(60);
+            executor.setThreadNamePrefix("taskExecutor-");
+            executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+            executor.setWaitForTasksToCompleteOnShutdown(true);
+            executor.setAwaitTerminationSeconds(60);
+            return executor;
+        }
+    }
+}
+```
+
+- 使用线程池
+
+```java
+//只需要在@Async注解中指定线程池名即可
+
+@Slf4j
+@Component
+public class Task {
+
+    public static Random random = new Random();
+
+    @Async("taskExecutor")
+    public void doTaskOne() throws Exception {
+        log.info("开始做任务一");
+        long start = System.currentTimeMillis();
+        Thread.sleep(random.nextInt(10000));
+        long end = System.currentTimeMillis();
+        log.info("完成任务一，耗时：" + (end - start) + "毫秒");
+    }
+
+    @Async("taskExecutor")
+    public void doTaskTwo() throws Exception {
+        log.info("开始做任务二");
+        long start = System.currentTimeMillis();
+        Thread.sleep(random.nextInt(10000));
+        long end = System.currentTimeMillis();
+        log.info("完成任务二，耗时：" + (end - start) + "毫秒");
+    }
+
+    @Async("taskExecutor")
+    public void doTaskThree() throws Exception {
+        log.info("开始做任务三");
+        long start = System.currentTimeMillis();
+        Thread.sleep(random.nextInt(10000));
+        long end = System.currentTimeMillis();
+        log.info("完成任务三，耗时：" + (end - start) + "毫秒");
+    }
+}
+```
+
+- 测试类
+
+```java
+@RunWith(SpringJUnit4ClassRunner.class)
+@SpringBootTest
+public class ApplicationTests {
+
+    @Autowired
+    private Task task;
+
+    @Test
+    public void test() throws Exception {
+
+        task.doTaskOne();
+        task.doTaskTwo();
+        task.doTaskThree();
+        Thread.currentThread().join();
+    }
+}
+```
