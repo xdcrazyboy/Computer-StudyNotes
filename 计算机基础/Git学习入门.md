@@ -227,3 +227,10 @@ ssh-keygen  -t rsa –C "youremail@example.com"
 3、git reset commit_id 撤销未被传送到远程代码库的提交
 
 做到这里就已经可以重新添加提交了（注意一定要撤销有大文件的提交）
+
+**上面还是存在问题，只能reset到最前面一次，但如果问题就出在那最前面的一次？ 需要重置commit：**
+```
+git reset --soft HEAD^
+```
+- 这样就成功的撤销了你的commit, 注意，仅仅是撤回commit操作，您写的代码仍然保留。
+- HEAD^的意思是上一个版本，也可以写成HEAD~1, 如果你进行了2次commit，想都撤回，可以使用HE
