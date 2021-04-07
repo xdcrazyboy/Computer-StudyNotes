@@ -24,8 +24,11 @@ free -m
 
 以MB为单位显示内存使用情况
 ```
+- 查看java程序设的内存，可以通过 ps -ef | grep jar (如果是resin容器启动，就看resin，设置是conf里面的resin.properties)
 
-4. CPU 
+jvm_args  : -Xms1024m -Xmx15000m -XX:MaxPermSize=2048m -Xdebug -Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=n
+
+1. CPU 
 
 top后键入P看一下谁占用最大
 ```

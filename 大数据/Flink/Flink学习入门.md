@@ -387,4 +387,3 @@ Flink会周期性地为应用状态生成检查点，一旦发生故障，Flink�
 * **日志集成服务**:Flink实现了流行的slf4j日志接口，并与日志框架log4j或logback集成。
 * **指标服务**: Flink提供了一个复杂的度量系统来收集和报告系统和用户定义的度量指标信息。度量信息可以导出到多个报表组件服务，包括 JMX, Ganglia, Graphite, Prometheus, StatsD, Datadog, 和 Slf4j.
 * **标准的WEB REST API接口服务**: Flink提供多种REST API接口，有提交新应用程序、获取正在运行的应用程序的Savepoint服务信息、取消应用服务等接口。REST API还提供元数据信息和已采集的运行中或完成后的应用服务的指标信息。
-
