@@ -105,4 +105,24 @@ Desired survivor size 697925632 bytes, new threshold 6 (max 6)
 - age   1:  340847128 bytes,  340847128 total
 : 10905216K->366409K(12268352K), 0.1260961 secs] 12967776K->2428970K(40579904K), 0.1287021 secs] [Times: user=1.88 sys=0.11, real=0.13 secs]
 ```
+
+
+## kuaitou-api 老年代剩余空间还有很多，但是却进行了一次CMS
+
+```log
+2022-04-07T10:09:14.849+0800: 45507.697: [GC (Allocation Failure) 2022-04-07T10:09:14.849+0800: 45507.697: [ParNew: 7746217K->4979K(8709120K), 0.1099053 secs] 8049995K->308967K(24837120K), 0.1102290 secs] [Times: user=0.29 sys=0.03, real=0.11 secs]
+2022-04-07T10:09:32.954+0800: 45525.802: [GC (CMS Initial Mark) [1 CMS-initial-mark: 303987K(16128000K)] 4357022K(24837120K), 0.1989679 secs] [Times: user=0.39 sys=0.01, real=0.20 secs]
+2022-04-07T10:09:33.153+0800: 45526.001: [CMS-concurrent-mark-start]
+2022-04-07T10:09:33.364+0800: 45526.212: [CMS-concurrent-mark: 0.211/0.211 secs] [Times: user=0.52 sys=0.00, real=0.21 secs]
+2022-04-07T10:09:33.364+0800: 45526.212: [CMS-concurrent-preclean-start]
+2022-04-07T10:09:33.402+0800: 45526.250: [CMS-concurrent-preclean: 0.038/0.038 secs] [Times: user=0.03 sys=0.00, real=0.04 secs]
+2022-04-07T10:09:33.402+0800: 45526.250: [CMS-concurrent-abortable-preclean-start]
+ CMS: abort preclean due to time 2022-04-07T10:09:38.490+0800: 45531.338: [CMS-concurrent-abortable-preclean: 2.040/5.088 secs] [Times: user=2.06 sys=0.01, real=5.09 secs]
+2022-04-07T10:09:38.491+0800: 45531.339: [GC (CMS Final Remark) [YG occupancy: 4055296 K (8709120 K)]2022-04-07T10:09:38.491+0800: 45531.339: [Rescan (parallel) , 0.1663928 secs]2022-04-07T10:09:38.658+0800: 45531.506: [weak refs processing, 0.1447850 secs]2022-04-07T10:09:38.802+0800: 45531.650: [class unloading, 0.0843129 secs]2022-04-07T10:09:38.887+0800: 45531.735: [scrub symbol table, 0.0155863 secs]2022-04-07T10:09:38.902+0800: 45531.750: [scrub string table, 0.0028043 secs][1 CMS-remark: 303987K(16128000K)] 4359283K(24837120K), 0.4435910 secs] [Times: user=0.70 sys=0.03, real=0.44 secs]
+2022-04-07T10:09:38.935+0800: 45531.783: [CMS-concurrent-sweep-start]
+2022-04-07T10:09:39.099+0800: 45531.947: [CMS-concurrent-sweep: 0.142/0.164 secs] [Times: user=0.18 sys=0.00, real=0.17 secs]
+2022-04-07T10:09:39.099+0800: 45531.947: [CMS-concurrent-reset-start]
+2022-04-07T10:09:39.138+0800: 45531.986: [CMS-concurrent-reset: 0.039/0.039 secs] [Times: user=0.04 sys=0.00, real=0.04 secs]
+2022-04-07T10:09:59.501+0800: 45552.349: [GC (Allocation Failure) 2022-04-07T10:09:59.501+0800: 45552.349: [ParNew: 7746419K->6175K(8709120K), 0.0638041 secs] 8005409K->265480K(24837120K), 0.0641397 secs] [Times: user=0.32 sys=0.01, real=0.06 secs]
+2022-04-07T10:10:37.603+0800: 45590.451: [GC (Allocation Failure) 2022-04-07T10:10:37.604+0800: 45590.452: [ParNew: 7747615K->5611K(8709120K), 0.0607111 secs] 8006920K->265024K(24837120K), 0.0610551 secs] [Times: user=0.30 sys=0.01, real=0.06 secs]
 ```
