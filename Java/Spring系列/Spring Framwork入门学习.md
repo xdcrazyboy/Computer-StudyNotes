@@ -625,10 +625,20 @@ BeanCreateException | B3 | C3
 ### 10. 依赖注入类型选择
 
 ### 11. 基础类型注入
+- 原生类型：int
+- 标量类型：enum
+- 常规类型：Object、String
+- Spring类型： 
 
 ### 12. 集合类型注入
+- 数组类型（Array）：原生类型、标量类型、常规类型、Spring类型
+- 集合类型（collection）：
+  - Collection：List、Set（SortedSet、NavigableSet、EnumSet）
+  - Map：Properties
 
 ### 13. 限定注入
+- `@Qualifier`
+- 
 
 ### 14. 延迟依赖注入
 
