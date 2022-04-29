@@ -99,15 +99,485 @@ func main() {
 ```
 
 #### 查找重复的行
+**dup 版本一****:
 
+打印标准输入中多次出现的行，以重复次数开头。该程序将引入if语句，map数据类型以及bufio包
+
+```go
+// Dup1 prints the text of each line that appears more than
+// once in the standard input, preceded by its count.
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "os"
+)
+
+func main() {
+    counts := make(map[string]int)
+    //Scanner类型是该包最有用的特性之一，它读取输入并将其拆成行或单词；通常是处理行形式的输入最简单的方法。
+    input := bufio.NewScanner(os.Stdin)
+    //每次调用input.Scan()，即读入下一行，并移除行末的换行符；
+    //读取的内容可以调用input.Text()得到。
+    //Scan函数在读到一行时返回true，不再有输入时返回false。
+    for input.Scan() {
+        //下面语句等价于： line := input.Text(); counts[line] = counts[line] + 1
+        counts[input.Text()]++
+        //map中不含某个键时不用担心，首次读到新行时，等号右边的表达式counts[line]的值将被计算为其类型的零值，对于int即0
+    }
+    // NOTE: ignoring potential errors from input.Err()
+    for line, n := range counts {
+        if n > 1 {
+            //%d表示以十进制形式打印一个整型操作数
+            fmt.Printf("%d\t%s\n", n, line)
+        }
+    }
+}
+```
+
+**Printf的格式转换**：
+```
+%d          十进制整数
+%x, %o, %b  十六进制，八进制，二进制整数。
+%f, %g, %e  浮点数： 3.141593 3.141592653589793 3.141593e+00
+%t          布尔：true或false
+%c          字符（rune） (Unicode码点)
+%s          字符串
+%q          带双引号的字符串"abc"或带单引号的字符'c'
+%v          变量的自然形式（natural format）
+%T          变量的类型
+%%          字面上的百分号标志（无操作数）
+```
+>后缀f指format，ln指line
+- 以字母`f`结尾的格式化函数: 如`log.Printf`和`fmt.Errorf`，都采用fmt.Printf的格式化准则。
+- 以`ln`结尾的格式化函数: 则遵循Println的方式，以跟`%v`差不多的方式格式化参数，并在最后添加一个换行符
+
+
+
+**dup版本二**
+
+读取标准输入或是使用os.Open打开各个具名文件，并操作它们。
+
+```go
+// Dup2 prints the count and text of lines that appear more than once
+// in the input.  It reads from stdin or from a list of named files.
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "os"
+)
+
+func main() {
+    counts := make(map[string]int)
+    files := os.Args[1:]
+    if len(files) == 0 {
+        countLines(os.Stdin, counts)
+    } else {
+        for _, arg := range files {
+            //第一个值是被打开的文件(*os.File）
+            f, err := os.Open(arg)
+            //如果err等于内置值nil（译注：相当于其它语言里的NULL），那么文件被成功打开
+            if err != nil {
+                fmt.Fprintf(os.Stderr, "dup2: %v\n", err)
+                continue
+            }
+            countLines(f, counts)
+            f.Close()
+        }
+    }
+    for line, n := range counts {
+        if n > 1 {
+            fmt.Printf("%d\t%s\n", n, line)
+        }
+    }
+}
+
+func countLines(f *os.File, counts map[string]int) {
+    input := bufio.NewScanner(f)
+    for input.Scan() {
+        counts[input.Text()]++
+    }
+    // NOTE: ignoring potential errors from input.Err()
+}
+
+```
+**说明：**
+- map是一个由make函数创建的数据结构的引用。
+- map作为参数传递给某函数时，该函数接收这个引用的一份拷贝（copy，或译为副本），被调用函数对map底层数据结构的任何修改，调用者函数都可以通过持有的map引用看到。
+- 在我们的例子中，countLines函数向counts插入的值，也会被main函数看到。
+>（译注：类似于C++里的引用传递，实际上指针是另一个指针了，但内部存的值指向同一块内存）
+
+
+**dup版本三**
+一口气把全部输入数据读到内存中，一次分割为多行，然后处理它们。
+
+
+引入了ReadFile函数（来自于io/ioutil包），其读取指定文件的全部内容，strings.Split函数把字符串分割成子串的切片。
+
+```go
+package main
+
+import (
+    "fmt"
+    "io/ioutil"
+    "os"
+    "strings"
+)
+
+func main() {
+    counts := make(map[string]int)
+    for _, filename := range os.Args[1:] {
+        data, err := ioutil.ReadFile(filename)
+        if err != nil {
+            fmt.Fprintf(os.Stderr, "dup3: %v\n", err)
+            continue
+        }
+        //ReadFile函数返回一个字节切片（byte slice），必须把它转换为string，才能用strings.Split分割。
+        for _, line := range strings.Split(string(data), "\n") {
+            counts[line]++
+        }
+    }
+    for line, n := range counts {
+        if n > 1 {
+            fmt.Printf("%d\t%s\n", n, line)
+        }
+    }
+}
+```
+
+
+### GIF动画
+生成的图形名字叫利萨如图形（Lissajous figures）。
+
+下面代码引入新的结构，包括const声明，struct结构体类型，复合声明。
+```go
+// Lissajous generates GIF animations of random Lissajous figures.
+package main
+
+import (
+    "image"
+    "image/color"
+    "image/gif"
+    "io"
+    "math"
+    "math/rand"
+    "os"
+    "time"
+)
+//引入包带过多单词时，通常我们只需要用最后那个单词表示这个包就可以
+//[]color.Color{...} 复合声明,slice切片
+var palette = []color.Color{color.White, color.Black}
+
+const (
+    //整个包都可用，常量声明的值必须是一个数字值、字符串或者一个固定的boolean值。
+    whiteIndex = 0 // first color in palette
+    blackIndex = 1 // next color in palette
+)
+
+func main() {
+    // The sequence of images is deterministic unless we seed
+    // the pseudo-random number generator using the current time.
+    // Thanks to Randall McPherson for pointing out the omission.
+    
+    //调用lissajous函数，用它来向标准输出流打印信息
+    rand.Seed(time.Now().UTC().UnixNano())
+    lissajous(os.Stdout)
+}
+
+func lissajous(out io.Writer) {
+    //把常量声明定义在函数体内部，那么这种常量就只能在函数体内用
+    const (
+        cycles  = 5     // number of complete x oscillator revolutions
+        res     = 0.001 // angular resolution
+        size    = 100   // image canvas covers [-size..+size]
+        nframes = 64    // number of animation frames
+        delay   = 8     // delay between frames in 10ms units
+    )
+
+    freq := rand.Float64() * 3.0 // relative frequency of y oscillator
+    //复合声明，生成的是struct结构体，其内部变量LoopCount字段会被设置为nframes；而其它的字段会被设置为各自类型默认的零值
+    anim := gif.GIF{LoopCount: nframes}
+    phase := 0.0 // phase difference
+    //外层循环会循环64次，每一次都会生成一个单独的动画帧。
+    for i := 0; i < nframes; i++ {
+        //它生成了一个包含两种颜色的201*201大小的图片，白色和黑色。
+        rect := image.Rect(0, 0, 2*size+1, 2*size+1)
+        img := image.NewPaletted(rect, palette)
+        for t := 0.0; t < cycles*2*math.Pi; t += res {
+            //内层循环设置两个偏振值。x轴偏振使用sin函数。
+            x := math.Sin(t)
+            //y轴偏振也是正弦波，但其相对x轴的偏振是一个0-3的随机值，初始偏振值是一个零值，随着动画的每一帧逐渐增加。
+            y := math.Sin(t*freq + phase)
+            //循环会一直跑到x轴完成五次完整的循环。每一步它都会调用SetColorIndex来为(x,y)点来染黑色。
+            img.SetColorIndex(size+int(x*size+0.5), size+int(y*size+0.5),
+                blackIndex)
+        }
+        phase += 0.1
+        //将结果append到anim中的帧列表末尾，并设置一个默认的80ms的延迟值
+        anim.Delay = append(anim.Delay, delay)
+        anim.Image = append(anim.Image, img)
+    }
+    //循环结束后所有的延迟值被编码进了GIF图片中，并将结果写入到输出流
+    gif.EncodeAll(out, &anim) // NOTE: ignoring encoding errors
+}
+
+```
+
+
+### 并发访问url
+先来个非并发版本的：
+类似curl的最基本功能，fetch访问指定的url，并将响应的body打印出来
+```go
+package main
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+)
+
+func main() {
+	for _, url := range os.Args[1:] {
+		if !strings.HasPrefix(url, "http://") {
+			url = "http://" + url
+		}
+		resp, err := http.Get(url)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fetch: %v\n", err)
+			os.Exit(1)
+		}
+		status := resp.Status
+		fmt.Println(status)
+		//函数调用io.Copy(dst, src)会从src中读取内容，并将读到的结果写入到dst中，使用这个函数替代掉例子中的ioutil.ReadAll来拷贝响应结构体到os.Stdout
+		out, err := io.Copy(os.Stdout, resp.Body)
+		// b, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fetch: reading %s: %v\n", url, err)
+			os.Exit(1)
+		}
+		fmt.Printf("%s", out)
+	}
+}
+```
+
+
+**并发**：
+fetchall的特别之处在于它会同时去获取所有的URL，所以这个程序的总执行时间不会超过执行时间最长的那一个任务。
+
+```go
+// Fetchall fetches URLs in parallel and reports their times and sizes.
+package main
+
+import (
+    "fmt"
+    "io"
+    "io/ioutil"
+    "net/http"
+    "os"
+    "time"
+)
+
+func main() {
+    start := time.Now()
+    ch := make(chan string)
+    for _, url := range os.Args[1:] {
+        //goroutine是一种函数的并发执行方式，而channel是用来在goroutine之间进行参数传递。
+        //main函数本身也运行在一个goroutine中
+        go fetch(url, ch) // start a goroutine
+    }
+    for range os.Args[1:] {
+        fmt.Println(<-ch) // receive from channel ch
+    }
+    fmt.Printf("%.2fs elapsed\n", time.Since(start).Seconds())
+}
+
+/**
+* - 当一个goroutine尝试在一个channel上做send或者receive操作时，这个goroutine会阻塞在调用处，
+*     直到另一个goroutine从这个channel里接收或者写入值，这样两个goroutine才会继续执行channel操作之后的逻辑。
+* - 每一个fetch函数在执行时都会往channel里发送一个值（ch <- expression），主函数负责接收这些值（<-ch）。
+* - 这个程序中我们用main函数来接收所有fetch函数传回的字符串，可以避免在goroutine异步执行还没有完成时main函数提前退出。
+*/
+func fetch(url string, ch chan<- string) {
+    start := time.Now()
+    resp, err := http.Get(url)
+    if err != nil {
+        ch <- fmt.Sprint(err) // send to channel ch
+        return
+    }
+    //ioutil.Discard输出流可以把这个变量看作一个垃圾桶，可以向里面写一些不需要的数据
+    nbytes, err := io.Copy(ioutil.Discard, resp.Body)
+    resp.Body.Close() // don't leak resources
+    if err != nil {
+        ch <- fmt.Sprintf("while reading %s: %v", url, err)
+        return
+    }
+    secs := time.Since(start).Seconds()
+    ch <- fmt.Sprintf("%.2fs  %7d  %s", secs, nbytes, url)
+}
+```
+
+
+### Web服务
+```go
+// Server2 is a minimal "echo" and counter server.
+package main
+
+import (
+    "fmt"
+    "log"
+    "net/http"
+    "sync"
+)
+
+var mu sync.Mutex
+var count int
+
+func main() {
+    http.HandleFunc("/", handler)
+    http.HandleFunc("/showCount", showCounter)
+    log.Fatal(http.ListenAndServe("localhost:8000", nil))
+}
+
+// handler echoes the Path component of the requested URL.
+func handler(w http.ResponseWriter, r *http.Request) {
+    mu.Lock()
+    count++
+    mu.Unlock()
+
+    fmt.Fprintf(w, "%s %s %s\n", r.Method, r.URL, r.Proto)
+    for k, v := range r.Header {
+        fmt.Fprintf(w, "Header[%q] = %q\n", k, v)
+    }
+    fmt.Fprintf(w, "Host = %q\n", r.Host)
+    fmt.Fprintf(w, "RemoteAddr = %q\n", r.RemoteAddr)
+    if err := r.ParseForm(); err != nil {
+        log.Print(err)
+    }
+    for k, v := range r.Form {
+        fmt.Fprintf(w, "Form[%q] = %q\n", k, v)
+    }
+}
+
+// counter echoes the number of calls so far.
+func showCounter(w http.ResponseWriter, r *http.Request) {
+    mu.Lock()
+    fmt.Fprintf(w, "Count %d\n", count)
+    mu.Unlock()
+}
+```
+
+### 本章要点
+
+**控制流**：if、for、switch
+
+
+**命名类型**
+
+
+**指针**
+- 指针是一种直接存储了变量的内存地址的数据类型
+  - 指针是可见的内存地址
+  - &操作符可以返回一个变量的内存地址
+  - *操作符可以获取指针指向的变量内容
+- 不像C语言那样不受约束，也不想其他语言那样沦为单纯的“引用”，折中。
+  - 没有指针运算，不能对指针进行加减。
+
+
+**方法和接口**
+- 方法：是和命名类型关联的一类函数
+  - **go特别**：方法可以被关联到任意一种命名类型
+- 接口：一种抽象类型，这种类型可以让我们以同样的方式来处理不同的固有类型，
+  - 不用关心它们的具体实现，而只需要关注它们提供的方法
+
+
+**包（packages）**
+Go语言提供了一些很好用的package，并且这些package是可以扩展的。
+
+- 可以在 https://golang.org/pkg 和 https://godoc.org 中找到标准库和社区写的package。
+- godoc这个工具可以让你直接在本地命令行阅读标准库的文档。
+
+
+**注释**
+- 在源文件的开头写的注释是这个源文件的文档
+- 每一个函数之前写一个说明函数行为的注释也是一个好习惯。
+
+---
 
 ## 第二章 基本实体
 元素结构、变量、新类型定义、包和文件、以及作用域等概念
 
+### 命名
+- 大小写敏感
+- 25个关键字不能用于命名， 30多个预定义名字可以用，但要避免过渡使用语义混乱。
+- 可见性
+  - 在函数内部定义，那么它就只在函数内部有效
+
+
+### 声明
+Go语言主要有四种类型的声明语句：var、const、type和func，分别对应**变量、常量、类型和函数实体**对象的声明。
+
+- 包一级的各种类型的声明语句的顺序无关紧要（译注：函数内部的名字则必须先声明之后才能使用）
+
+**变量声明**：
+- `var 变量名字 类型 = 表达式`
+- 在Go语言中不存在未初始化的变量
+  - 数字0，空字符串，false
+  - 接口或引用类型（包括slice、指针、map、chan和函数）变量对应的零值是nil
+  - 数组或结构体等聚合类型对应的零值是每个元素或字段都是对应该类型的零值。
+  - go语言程序员应该让一些聚合类型的零值也具有意义，这样可以保证不管任何类型的变量总是有一个合理有效的零值状态。
+- **初始化**
+  - 在包级别声明的变量会在main入口函数执行前完成初始化。
+  - 局部变量将在声明语句被执行到的时候完成初始化。
+- **短声明**
+  - 在函数内部，有一种称为简短变量声明语句的形式可用于声明和初始化局部变量。
+  - 它以“名字 := 表达式”形式声明变量，变量的类型根据表达式来自动推导。
+  - 例如：`t := 0.0`
+  - var形式的声明语句往往是用于需要显式指定变量类型的地方，或者因为变量稍后会被重新赋值而初始值无关紧要的地方。例如：`var err error`，后面会进行重新赋值。
+  - 请记住“:=”是一个变量声明语句，而“=”是一个变量赋值操作。
+    - 简短变量声明左边的变量可能并不是全部都是刚刚声明的。
+    - 如果有一些**已经在相同的词法域声明过了**，那么简短变量声明语句对这些已经声明过的变量就只有赋值行为了。 
+    - 简短变量声明语句中**必须至少**要声明一个**新**的变量.
+    - 如果变量是在外部词法域声明的，那么简短变量声明语句将会在当前词法域重新声明一**个新的变量**
+```go
+f, err := os.Open(infile)
+// 解决的方法是第二个简短变量声明语句改用普通的多重赋值语句。就是用=号
+f, err := os.Create(outfile) // compile error: no new variables
+```
+
+
+**指针**
+如果用“var x int”声明语句声明一个x变量：
+- `&x`表达式（取x变量的内存地址），将产生一个指向该整数变量的指针，指针对应的**数据类型是*int**，“指向int类型的指针”。
+- 如果指针名字为p，可以说p指针指向变量x，或者p指针保存了x变量的内存地址。
+- `*p`:**对应p指针指向的变量的值**
+  - 因为*p对应一个变量，所以该表达式也可以出现在赋值语句的左边，表示更新指针所指向的变量的值。
+```go
+x := 1
+p := &x         // p, of type *int, points to x
+fmt.Println(*p) // "1"
+*p = 2          // equivalent to x = 2
+fmt.Println(x)  // "2"
+```
+- 任何类型的指针的零值都是nil。
+  - 如果p指向某个有效变量，那么p != nil测试为真。
+  - 指针之间也是可以进行相等测试的，只有当它们**指向同一个变量**或**全部是nil时才相等**。
+
+
 
 ## 第三章 数字、布尔值、字符串和常量
 - 并演示了如何显示和处理Unicode字符
-- 
+- 在函数外部定义，那么将在当前包的所有文件中都可以访问
+- 函数外部定义大写包级名字（包级函数名本身也是包级名字，大写函数也就是公共函数），可以被外部的包访问。
+  - 例如fmt包的Printf函数就是导出的，可以在fmt包外部访问。
+  - 包本身的名字一般总是用小写字母
+- 长度无限制，但是断点好，特别是局部变量。
+- 推荐驼峰，而不是下划线
 
 ## 第四章 复合类型
 
@@ -175,6 +645,7 @@ sliceB[2] 会抛异常，超出边界。 长度只有2.
 
 ### map[keyType]valueType
 - map的key，可以是int，可以是string及所有完全定义了==与!=操作的类型
+- 值则可以是任意类型
 
 
 
