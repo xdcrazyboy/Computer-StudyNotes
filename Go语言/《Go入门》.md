@@ -1,5 +1,6 @@
 
 # 开始学习Go
+[TOC]
 
 ## go的独特之处
 **它的主要目标是“兼具Python 等动态语言的开发速度和C/C++等编译型语言的性能与安全性”**
@@ -96,7 +97,10 @@ func main() {
 3. 可见性
 1）声明在函数内部，是函数的本地值，类似private
 2）声明在函数外部，是对当前包可见(包内所有.go文件都可见)的全局值，类似protect
-3）声明在函数外部且首字母大写是所有包可见的全局值,类似public
+3）声明在函数外部且首字母大写是所有包可见的全局值,类似public.
+>如果类型/接口/方法/函数/字段的首字母大写，则是 Public 的，对其他 package 可见，如果首字母小写，则是 Private 的，对其他 package 不可见。
+
+
 
 
 ## 经常疑惑的点
@@ -460,6 +464,7 @@ const i = 10000
 const MaxThread = 10
 const prefix = "astaxie_"
 ```
+- Go 语言中没有枚举(enum)的概念，一般可以用常量的方式来模拟枚举。
 
 
 >**特别之处**: 可以指定相当多的小数位数(例如200位)， 若指定給float32自动缩短为32bit，指定给float64自动缩短为64bit
@@ -629,28 +634,6 @@ var(
 
 目前感觉没啥卵用，先不介绍了。
 
-### 内置函数
-Go 语言拥有一些**不需要进行导入**操作就可以使用的内置函数。
-- 它们有时可以针对不同的类型进行操作，例如：len、cap 和 append
-- 或必须用于系统级的操作，例如：panic。
-- 因此，它们需要直接获得编译器的支持。
-
-```
-append          -- 用来追加元素到数组、slice中,返回修改后的数组、slice
-close           -- 主要用来关闭channel
-delete            -- 从map中删除key对应的value
-panic            -- 停止常规的goroutine  （panic和recover：用来做错误处理）
-recover         -- 允许程序定义goroutine的panic动作
-real            -- 返回complex的实部   （complex、real imag：用于创建和操作复数）
-imag            -- 返回complex的虚部
-make            -- 用来分配内存，返回Type本身(只能应用于slice, map, channel)
-new                -- 用来分配内存，主要用来分配值类型，比如int、struct。返回指向Type的指针
-cap                -- capacity是容量的意思，用于返回某个类型的最大容量（只能用于切片和 map）
-copy            -- 用于复制和连接slice，返回复制的数目
-len                -- 来求长度，比如string、array、slice、map、channel ，返回长度
-print、println     -- 底层打印函数，在部署环境中建议使用 fmt 包
-```
-
 ### 运算符
 
 **算数运算符**
@@ -705,7 +688,7 @@ value, ok := interface{}(container).([]string)
 - Go 没有三目运算符
 
 
-### for
+#### for
 
 - for循环，唯一的循环，多种形式。
 ```go
@@ -713,9 +696,9 @@ for initialization; condition; post {
     // zero or more statements
 }
 ```
-  - initialization语句是可选的，在循环开始前执行。initalization如果存在，必须是一条简单语句（simple statement），即，短变量声明、自增语句、赋值语句或函数调用。
-  - condition是一个布尔表达式（boolean expression），其值在每次循环迭代开始时计算。如果为true则执行循环体语句。
-  - post语句在循环体执行结束后执行，**之后再次**对condition求值。
+  - **initialization语句是可选的**，在循环开始前执行。initalization如果存在，必须是一条简单语句（simple statement），即，短变量声明、自增语句、赋值语句或函数调用。
+  - condition是一个布尔表达式（boolean expression），其值在**每次循环迭代开始时计算**。如果为true则执行循环体语句。
+  - post语句在**循环体执行结束后执行**，**之后再次**对condition求值。
 - for循环的这三个部分每个都可以省略，如果省略initialization和post，分号也可以省略（相当于 while）：
 ```go
 // a traditional "while" loop
@@ -744,11 +727,11 @@ func main() {
     fmt.Println(s)
 }
 ```
-  - 每次循环迭代，range产生一对值；索引以及在该索引处的元素值。
+  - 每次循环迭代，range产生**一对值**；**索引以及在该索引处的元素值**。
   - 这个例子不需要索引，但range的语法要求，要处理元素，必须处理索引
     - 一种思路是把索引赋值给一个临时变量（如temp）然后忽略它的值，但Go语言不允许使用无用的局部变量（local variables）
     - go语言提供了一种解决方案：`空标识符（blank identifier）`，即`_`（也就是下划线）。
-      - 空标识符可用于在任何语法需要变量名但程序逻辑不需要的时候
+      - 空标识符可用于在任何语法**需要变量名但程序逻辑不需要**的时候
 ```go
 // Echo2 prints its command-line arguments.
 package main
@@ -779,7 +762,7 @@ func main() {
 
 
 
-### switch 多路选择
+#### switch 多路选择
 ```go
 switch coinflip() {
 case "heads":
@@ -837,6 +820,336 @@ switch time.Now().Weekday() {
     whatAmI("hey")
 ```
 
+
+#### 标签和跳转
+Go语言使用标签（Lable）来标识一个语句的位置，用于goto、break、continue语句的跳转，语法如下：
+```go
+Lable:Statemaent
+```
+- goto语句用于函数内部的跳转，需要配合标签一起使用：
+```go
+    //跳转到标签后的语句执行
+  goto Lable
+```
+- goto只能在函数内跳转
+- goto语句不能跳过内部变量声明语句，这些变量在goto语句的标签语句处又是可见的。
+- goto语句只能跳到同级作用于或者上层作用域，不能跳到内部作用域。
+
+
+- break
+  - 用于跳出for、switch、select语句的执行，单独使用是跳出当前break所在的语句内层循环。
+  -  和标签一起使用，跳出标签所表示的for、switch、select语句的执行。 标签和break必须在同一个函数内。
+
+
+### 函数
+函数在go语言中是一等公民，既起到”胶水“的作用，也是为其他语言特性起到底层支撑作用。
+>命名类型的方法本质上是一个函数，类型方法是go语言面向对象的实现基础。 接口底层同样是同样是通过指针和函数将接口和接口实例连接在一起。
+- 支持闭包，支持可变参数， **返回值也支持有多个**。
+  - 如果多值有**错误类型，一般作为最后一个返回值**。
+- 函数是一种类型，函数可以将其他函数调用作为它的参数，只要这个被调用函数的返回值个数、返回值类型和返回值的顺序与调用函数所需求的实参是一致的，例如：
+```
+假设 f1 需要 3 个参数 f1(a, b, c int)，同时 f2 返回 3 个参数 f2(a, b int) (int, int, int)，就可以这样调用 f1：f1(f2(a, b))。
+```
+- 在 Go 里面函数**重载是不被允许**的.报错`funcName redeclared in this book, previous declaration at lineno`.
+  - Go 语言不支持这项特性的主要原因是函数重载**需要进行多余的类型匹配影响性能**；没有重载意味着只是一个简单的函数调度。
+- 函数**值**（functions value）之间**可以相互比较**：如果它们引用相同的函数或者都是 nil 的话，则认为它们是相同的函数。
+- 函数不能在其它函数里面声明（**不能嵌套**），不过我们可以通过使用**匿名函数**来破除这个限制。
+```go
+ func add(a, b int) (sum int){
+     anonymous := func(x, y int) int {
+         return x + y
+     }
+     return anonymous(a, b)
+ } 
+
+```
+- 支持有名的返回值，参数名相当于函数体内最外层的局部变量，命名返回值会被初始化为类型零值，最后return可以不带参数直接返回。
+  - 如果在函数里对命名返回值的变量重新定义 `sum := a + b`,那return的时候就需要带上sum。
+- 不支持默认值参数？
+- 目前 Go 没有泛型（generic）的概念，也就是说它不支持那种支持多种类型的函数。
+  - 不过在大部分情况下可以通过接口（interface），特别是空接口与类型选择（type switch）与 / 或者通过使用反射（reflection）来实现相似的功能。
+  - 但这回影响性能，让代码变得复杂，最好是为每一个类型单独创建一个函数。
+
+
+#### 按值传递 VS 按引用传递
+**按值传递（call by value）、按引用传递（call by reference）**
+
+
+- Go **默认使用按值传递**来传递参数，也就是传递参数的副本。函数接收参数副本之后，在使用变量的过程中可能对副本的值进行更改，但不会影响到原来的变量。
+- 希望可以直接修改参数的值，需要将**参数的地址**（**变量名前面添加 & 符号**，比如 &variable）传递给函数，这就是所谓的按引用传递，比如 Function(&arg1)。
+  - 此时传递给函数的是一个指针。
+  - 如果传递给函数的是一个指针，指针的值（一个地址）会被复制，但指针的值所指向的地址上的值不会被复制；
+  - 我们可以通过这个指针的值来修改这个值所指向的地址上的值。
+  - 指针也是变量类型，有自己的地址和值，通常指针的值指向一个变量的地址。所以，**按引用传递也是按值传递**。
+- 在函数调用时，像切片（slice）、字典（map）、接口（interface）、通道（channel）这样的引用类型都是默认使用引用传递（即使没有显式的指出指针）
+- 传递指针（一个 32 位或者 64 位的值）的消耗都比传递副本来得少。
+  - 如果一个函数需要返回四到五个值，我们可以传递：
+    - 一个切片给函数（如果返回值具有相同类型）
+    - 或者是传递一个结构体（如果返回值具有不同的类型）
+
+
+#### 命名的返回值
+- 当需要返回多个非命名返回值时，需要使用 () 把它们括起来，比如 (int, int)。单个可以不用括号。
+- 命名返回值作为结果形参（result parameters）被初始化为相应类型的零值。当需要返回的时候，我们**只需要一条简单的不带参数的 return 语句**。
+>需要注意的是，即使只有一个命名返回值，也需要使用 () 括起来。
+>return 或 return var 都是可以的。不过 return var = expression（表达式） 会引发一个编译错误
+
+
+**尽量使用命名返回值：会使代码更清晰、更简短，同时更加容易读懂。**
+
+传递指针进入函数，不再需要使用return返回。
+
+#### 传递变长参数 
+- 长度可以为0，形如...type
+```go
+func myFunc(a, b, arg ...int) {}
+```
+- 类似**某个类型**的 slice 的参数，可以通过 slice... 的形式来传递参数调用变参函数。也可以用访问切片的方式访问变长参数。
+```go
+  package main
+
+import "fmt"
+
+func main() {
+    x := min(1, 3, 2, 0)
+    fmt.Printf("The minimum is: %d\n", x)
+    slice := []int{7,9,3,5,1}
+    //注意传递的参数形式
+    x = min(slice...)
+    fmt.Printf("The minimum in the slice is: %d", x)
+}
+
+func min(s ...int) int {
+    if len(s)==0 {
+        return 0
+    }
+    min := s[0]
+    for _, v := range s {
+        if v < min {
+            min = v
+        }
+    }
+    return min
+}
+
+```
+- 不定参数类型必须是相同的。
+- 不定参数必须是函数最后一个参数。
+- 如果多个参数的**类型并不是都相同**的呢？使用 5 个参数来进行传递并不是很明智的选择，有 2 种方案可以解决这个问题：
+  1. 使用结构，类似定义对象。
+  2. 使用空接口，这样就可以接受任何类型的参数。
+     - 该方案不仅可以用于长度未知的参数，还可以用于任何不确定类型的参数。
+     - 一般而言我们会使用一个 for-range 循环以及 switch 结构对每个参数的类型进行判断：
+```go
+func typecheck(..,..,values … interface{}) {
+    for _, value := range values {
+        switch v := value.(type) {
+            case int: …
+            case float: …
+            case string: …
+            case bool: …
+            default: …
+        }
+    }
+}
+```
+
+#### defer和追踪，recover
+- 关键字`defer`允许我们推迟到函数返回之前（或任意位置执行return语句之后）一刻才执行某个语句或函数。
+- 类似`finally`语句块，它一般用于释放某些已分配的资源。
+  - 关闭文件流:`defer file.Close()`
+  - 解锁一个加锁的资源: `defer mu.Unlock()`
+  - 打印最终报告:`defer printFooter()`
+  - 关闭数据库链接:`defer disconnectFromDB()`
+- 使用 defer 的语句同样可以接受参数，下面这个例子就会在执行 defer 语句时打印 0：
+```go
+    i := 0
+    defer fmt.Println(i)
+    i++
+    return
+}
+```
+- 当有多个 defer 行为被注册时，它们会以逆序执行（类似栈，即后进先出）：
+```go
+func f() {
+    for i := 0; i < 5; i++ {
+        defer fmt.Printf("%d ", i)
+    }
+}
+//上面的代码将会输出：4 3 2 1 0
+```
+- 使用 defer 语句实现代码追踪。一个基础但十分实用的实现代码执行追踪的方案就是在进入和离开某个函数打印相关的消息
+- 使用 defer 语句来记录函数的参数与返回值.
+
+
+**类似try...catch: defer 和 recover**
+```go
+func get(index int) (ret int) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Some error happened!", r)
+			ret = -1
+		}
+	}()
+	arr := [3]int{2, 3, 4}
+	return arr[index]
+}
+
+func main() {
+	fmt.Println(get(5))
+	fmt.Println("finished")
+}
+```
+能正常运行到结束。
+```
+Some error happened! runtime error: index out of range [5] with length 3
+-1
+finished
+```
+- 在 get 函数中，使用 defer 定义了异常处理的函数，在协程退出前，会执行完 defer 挂载的任务。因此如果触发了 panic，控制权就交给了 defer。
+- 在 defer 的处理逻辑中，使用 recover，使程序恢复正常，并且将返回值设置为 -1，在这里也可以不处理返回值，如果不处理返回值，返回值将被置为默认值 0。
+
+
+
+#### 错误处理
+- 函数实现过程中如果出现不能处理的错误，可以返回跟调用者处理。
+  - 比如我们调用标准库函数os.Open读取文件，os.Open 有2个返回值，第一个是 *File，第二个是 error。
+    -  如果调用成功，error 的值是 nil。
+    -  如果调用失败，例如文件不存在，我们可以通过 error 知道具体的错误信息
+ - 可以通过 errorw.New 返回自定义的错误
+
+```go
+import (
+	"errors"
+	"fmt"
+)
+
+func hello(name string) error {
+	if len(name) == 0 {
+		return errors.New("error: name is null")
+	}
+	fmt.Println("Hello,", name)
+	return nil
+}
+
+func main() {
+	if err := hello(""); err != nil {
+		fmt.Println(err)
+	}
+}
+// error: name is null
+```
+
+- error 往往是能预知的错误，但是也可能出现一些**不可预知的错误**，例如数组越界，这种错误可能会导致程序非正常退出，在 Go 语言中称之为 **panic**。
+
+#### 内置函数
+Go 语言拥有一些**不需要进行导入**操作就可以使用的内置函数。
+- 它们有时可以针对不同的类型进行操作，例如：len、cap 和 append
+- 或必须用于系统级的操作，例如：panic。
+- 因此，它们需要直接获得编译器的支持。
+
+```go
+append          -- 用来追加元素到数组、slice中,返回修改后的数组、slice
+close           -- 主要用来关闭channel
+delete            -- 从map中删除key对应的value
+panic            -- 停止常规的goroutine  （panic和recover：用来做错误处理）
+recover         -- 允许程序定义goroutine的panic动作
+real            -- 返回complex的实部   （complex、real imag：用于创建和操作复数）
+imag            -- 返回complex的虚部
+make            -- 用来分配内存，返回Type本身(只能应用于slice, map, channel), make (type)
+new                -- 用来分配内存，主要用来分配值类型，比如int、struct。返回指向Type的指针
+cap                -- capacity是容量的意思，用于返回某个类型的最大容量（只能用于切片和 map）
+copy            -- 用于复制和连接slice，返回复制的数目
+len                -- 来求长度，比如string、array、slice、map、channel ，返回长度
+print、println     -- 底层打印函数，在部署环境中建议使用 fmt 包
+```
+- new 和 make 均是用于分配内存：
+  - new 用于值类型和用户定义的类型，如自定义结构，
+  - make 用于内置引用类型（切片、map 和管道）。
+- 它们的用法就像是函数，但是将类型作为参数：new (type)、make (type)。
+  - new (T) 分配类型 T 的**零值并返回其地址**，也就是指向类型 T 的指针。它也可以被用于基本类型：v := new(int)。
+  - make (T) 返回类型 T 的**初始化之后的值**，因此它比 new 进行更多的工作.
+
+
+## 结构体、方法和接口
+
+### 结构体
+结构体**类似于其他语言中的 class**，可以在结构体中定义多个字段，为结构体实现方法，实例化等。
+- 字段不需要每个都赋值，没有显性赋值的变量将被赋予默认值，例如 age 将被赋予默认值 0。
+- func 和函数名hello 之间，加上该方法对应的实例名 stu 及其类型 *Student，可以通过实例名访问该实例的字段name和其他方法了
+- 调用方法通过 实例名.方法名(参数) 的方式。
+```go
+type Student struct {
+	name string
+	age  int
+}
+func (stu *Student) hello(person string) string {
+	return fmt.Sprintf("hello %s, I am %s", person, stu.name)
+}
+
+func main() {
+	stu := &Student{
+		name: "Tom",
+	}
+	msg := stu.hello("Jack")
+	fmt.Println(msg) // hello Jack, I am Tom
+}
+```
+- 还可以使用 new 实例化。
+```
+func main() {
+	stu2 := new(Student)
+	fmt.Println(stu2.hello("Alice")) // hello Alice, I am  , name 被赋予默认值""
+}
+
+```
+
+### 方法
+
+
+
+### 接口
+- 接口定义了一组方法的集合，接口不能被实例化，一个类型可以实现多个接口。
+- Go 语言中，并不需要显式地声明实现了哪一个接口，只需要直接实现该接口对应的方法即可，必须全部实现，否则会报错。
+
+
+**如何确保某个类型实现了某个接口的所有方法呢？**
+
+一般可以使用下面的方法进行检测，如果实现不完整，编译期将会报错。
+```go
+var _ Person = (*Student)(nil)
+var _ Person = (*Worker)(nil)
+```
+将空值 nil 转换为 *Student 类型，再转换为 Person 接口，如果转换失败，说明 Student 并没有实现 Person 接口的所有方法。
+
+
+- 实例可以强制类型转换为接口，接口也可以强制类型转换为实例。
+```go
+func main() {
+	var p Person = &Student{
+		name: "Tom",
+		age:  18,
+	}
+
+	stu := p.(*Student) // 接口转为实例
+	fmt.Println(stu.getAge())
+}
+```
+
+**空接口**：
+如果定义了一个没有任何方法的空接口，那么这个接口可以表示任意类型。**有点像泛型**。
+```go
+func main() {
+	m := make(map[string]interface{})
+	m["name"] = "Tom"
+	m["age"] = 18
+	m["scores"] = [3]int{98, 99, 85}
+	fmt.Println(m) // map[age:18 name:Tom scores:[98 99 85]]
+}
+
+```
+
+
 ---
 
 # Go并发
@@ -847,11 +1160,101 @@ switch time.Now().Weekday() {
 - 在引入线程的操作系统中，通常都是把**进程作为分配资源的基本单位**，而把**线程作为独立运行和独立调度的基本单位**
 	>比如音乐进程，可以一边查看排行榜一边听音乐，互不影响。
 
-## Goroutine介绍
+## 并发编程（Goroutine）
+Go 语言提供了 sync 和 channel 两种方式支持协程(goroutine)的并发。
 
+### sync
+例如我们希望并发下载 N 个资源，多个并发协程之间**不需要通信**，那么就可以使用 `sync.WaitGroup`，等待所有并发协程执行结束。
+```go
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+var wg sync.WaitGroup
+
+func download(url string) {
+	fmt.Println("start to download", url)
+	time.Sleep(time.Second) // 模拟耗时操作
+    //减去一个计数。
+	wg.Done()
+}
+
+func main() {
+	for i := 0; i < 3; i++ {
+        //为 wg 添加一个计数
+		wg.Add(1)
+        //启动新的协程并发执行 download 函数
+		go download("a.com/" + string(i+'0'))
+	}
+    //等待所有的协程执行结束。
+	wg.Wait()
+	fmt.Println("Done!")
+}
+```
+
+
+### channel
+```go
+var ch = make(chan string, 10) // 创建大小为 10 的缓冲信道
+
+func download(url string) {
+	fmt.Println("start to download", url)
+	time.Sleep(time.Second)
+	ch <- url // 将 url 发送给信道
+}
+
+func main() {
+	for i := 0; i < 3; i++ {
+		go download("a.com/" + string(i+'0'))
+	}
+	for i := 0; i < 3; i++ {
+		msg := <-ch // 等待信道返回消息。
+		fmt.Println("finish", msg)
+	}
+	fmt.Println("Done!")
+}
+```
+- 使用 channel 信道，可以在协程之间传递消息。阻塞等待并发协程返回消息。
+
+
+---
+
+# 包和模块
+
+## 包
+一般来说，一个文件夹可以作为 package，同一个 package 内部变量、类型、方法等定义可以相互看到。
+
+如果calc.go和main.go平级，分别定义add和main方法，运行 go run main.go，会报错，add 未定义：
+```go
+./main.go:6:14: undefined: add
+```
+因为 go run main.go 仅编译 main.go 一个文件，所以命令需要换成：`go run main.go calc.go`
+
+
+## 模块
+- Go Modules 是 Go 1.11 版本之后引入的，Go 1.11 之前使用 $GOPATH 机制。
+ Go Modules 可以算作是较为完善的包管理工具。
+ 同时支持代理，国内也能享受高速的第三方包镜像服务。
+ 
+ 
+**go mod 的使用**
+- 环境变量 GO111MODULE 的值默认为 AUTO，强制使用 Go Modules 进行依赖管理，可以将 GO111MODULE 设置为 ON。
+
+
+---
 
 # 网络编程
 
+
+
+
+--- 
+# 单元测试
+假设我们希望测试 package main 下 `calc.go` 中的函数，要只需要新建 `calc_test.go` 文件，在calc_test.go中**新建测试用例**即可。
+
+- 运行 go test，将自动运行当前 package 下的所有测试用例，如果需要查看详细的信息，可以添加-v参数。
 
 # 项目实战
 
@@ -862,3 +1265,7 @@ switch time.Now().Weekday() {
 
 ```
 
+
+
+# 参考资料
+- 《Go入门指南》转自链接：https://learnku.com/docs/the-way-to-go/introduce/3599
