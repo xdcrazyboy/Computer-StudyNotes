@@ -1269,3 +1269,10 @@ func main() {
 
 # 参考资料
 - 《Go入门指南》转自链接：https://learnku.com/docs/the-way-to-go/introduce/3599
+- 《简明教程》：https://geektutu.com/post/quick-go-gin.html
+- 《跟着煎鱼学Go》：https://eddycjy.gitbook.io/golang/di-10-ke-pa-chong/go2018
+- 《Go by Example中文版》：https://gobyexample-cn.github.io/
+- 《Go 编程基础》--无闻：https://github.com/unknwon/go-fundamental-programming
+- https://books.studygolang.com/gopl-zh/ch3/ch3-01.html
+- web框架
+  - 《Echo文档》：https://www.bookstack.cn/read/go-echo/README.md
