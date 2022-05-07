@@ -111,6 +111,18 @@ func main() {
 - 产生的二进制可执行文件放在 $GOPATH/bin目录下，
 - 生成的中间缓存文件会被保存在 $GOPATH/pkg 下
 
+
+- 配置变量GOPATH会跟安装默认的冲突不？ 
+  >是配置到~/.bashrc里。然后source一下.
+
+
+- `go install xxx`文件后，提示安装到了最初go安装默认的位置，但是已经指定GOPATH，为啥还会安装到那？  提示：`open /usr/local/go/bin/mathapp: permission denied`。 难道还要指定GOROOT？ 我希望安装到的是自定义的GOPATH下的src/bin目录下
+>**解决办法**：
+>(a) 如果你没有设置你的GOBIN env变量,你可以在GOROOT/bin中获得Go编译器二进制文件,而你的二进制文件将在GOPATH/bin中.(我个人喜欢这种二进制分离.)
+>(b) 如果你将GOBIN设置为任何东西,那么Go二进制文件和你的二进制文件都将转到GOBIN.
+
+
+
 ### 包 package
 - go 里面一个目录为一个package, 一个package级别的func, type, 变量, 常量, 这个package下的所有文件里的代码都可以随意访问, 不需要首字母大写
 - **同目录**下的两个文件如hello.go和hello2.go中的package 定义的名字要是同一个，不同的话，是会报错的 ==> 所以main方法要单独放一个文件
@@ -1071,6 +1083,42 @@ print、println     -- 底层打印函数，在部署环境中建议使用 fmt �
   - make (T) 返回类型 T 的**初始化之后的值**，因此它比 new 进行更多的工作.
 
 
+#### 递归函数
+当一个函数在其函数体内调用自身，则称之为递归。最经典的例子便是计算斐波那契数列，即前两个数为 1，从第三个数开始每个数均为前两个数之和。
+```go
+func fibonacci(n int) (res int) {
+    if n <= 1 {
+        res = 1
+    } else {
+        res = fibonacci(n-1) + fibonacci(n-2)
+    }
+    return
+}
+
+```
+一般出现大量递归调用会导致程序栈内存分配耗尽，这个问题可以通过 **懒惰求值**的技术解决。 而Go语言中，可以使用管道和goroutine来实现。
+
+
+#### 将函数作为参数
+函数可以作为其它函数的参数进行传递，然后在其它函数内调用执行，一般称之为回调。
+```go
+func main() {
+    callback(1, Add)
+}
+
+func Add(a, b int) {
+    fmt.Printf("The sum of %d and %d is: %d\n", a, b, a+b)
+}
+
+func callback(y int, f func(int, int)) {
+    f(y, 2) // this becomes Add(1, 2)
+}
+
+```
+
+#### 闭包
+当我们不希望给函数起名字的时候，可以使用匿名函数，例如：`func(x, y int) int { return x + y }`
+
 ## 结构体、方法和接口
 
 ### 结构体
@@ -1255,6 +1303,11 @@ func main() {
 假设我们希望测试 package main 下 `calc.go` 中的函数，要只需要新建 `calc_test.go` 文件，在calc_test.go中**新建测试用例**即可。
 
 - 运行 go test，将自动运行当前 package 下的所有测试用例，如果需要查看详细的信息，可以添加-v参数。
+
+
+# GC
+Go的GC只会清理被分配到堆上的、不再有任何引用的对象。
+
 
 # 项目实战
 
