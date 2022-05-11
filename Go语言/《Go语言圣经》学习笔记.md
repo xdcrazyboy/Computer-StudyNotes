@@ -854,7 +854,7 @@ func init() {
 ```
   - 虽然cwd在外部已经声明过，但是:=语句还是将cwd和err**重新声明为新的局部变量**。因为内部声明的cwd将屏蔽外部的声明，因此上面的代码并**不会正确更新包级声明的cwd变量**。
   - 全局的cwd变量依然是没有被正确初始化的，而且看似正常的日志输出更是让这个BUG更加隐晦。
-- 有许多方式可以避免出现类似潜在的问题。最直接的方法是通过单独声明err变量，来**避免使用:=的简短声明方式**：
+- 有许多方式可以避免出现类似潜在的问题。最直接的方法是**通过单独声明err变量**，来**避免使用:=的简短声明方式**：
 ```go
 var cwd string
 
@@ -869,6 +869,9 @@ func init() {
 
 
 ## 第三章 基础数据类型：数字、布尔值、字符串和常量
+
+### 整型
+
 - 有两种一般**对应特定CPU平台机器字大小**的有符号和无符号整数**int和uint**；其中int是应用最广泛的数值类型。这两种类型都有同样的大小，32或64bit，但是我们不能对此做任何的假设；因为不同的编译器即使在相同的硬件平台上可能产生不同的大小。
 - Unicode字符**rune类型是和int32等价**的类型，通常用于**表示一个Unicode码点**。这两个名称可以互换使用。
 - 同样**byte也是uint8类型的等价类型**，byte类型一般用于**强调数值是一个原始的数据**而不是一个小的整数。
@@ -894,21 +897,390 @@ fmt.Println(i, i+1, i*i) // "127 -128 1"
 
 
 - 位操作运算符`^`作为二元运算符时是按位异或（XOR），当用作一元运算符时表示按位取反；也就是说，它返回一个每个bit位都取反的数。
- 位操作运算符`&^`用于按位置零（AND NOT）：如果对应y中bit位为1的话，表达式z = x &^ y结果z的对应的bit位为0，否则z对应的bit位等于x相应的bit位的值。
+- 位操作运算符`&^`用于按位置零（AND NOT）：如果对应y中bit位为1的话，表达式z = x &^ y结果z的对应的bit位为0，否则z对应的bit位等于x相应的bit位的值。
+
+
+下面的代码演示了如何**使用位操作解释uint8类型值的8个独立的bit位**。
+它使用了Printf函数的%b参数打印二进制格式的数字；其中%08b中08表示打印至少8个字符宽度，**不足的前缀部分用0填充**。
+```go
+var x uint8 = 1<<1 | 1<<5  //00000010 | 00100000
+var y uint8 = 1<<1 | 1<<2
+
+fmt.Printf("%08b\n", x) // "00100010", the set {1, 5}
+fmt.Printf("%08b\n", y) // "00000110", the set {1, 2}
+
+fmt.Printf("%08b\n", x&y)  // "00000010", the intersection {1}
+fmt.Printf("%08b\n", x|y)  // "00100110", the union {1, 2, 5}
+fmt.Printf("%08b\n", x^y)  // "00100100", the symmetric difference {2, 5}
+fmt.Printf("%08b\n", x&^y) // "00100000", the difference {5}
+```
+
+
+- **无符号数**往往只有在**位运算**或其它特殊的运算场景才会使用，就像bit集合、分析二进制文件格式或者是哈希和加密操作等。它们通常**并不用于仅仅是表达非负数量的场合**。
+
+
+**类型转换**：对于每种类型T，**如果转换允许的话，类型转换操作T(x)将x转换为T类型**。
+
+
+**fmt.Printf格式**： 
+- 当使用fmt包打印一个数值时，我们可以用`%d`、`%o`或`%x`参数控制输出的进制格式，就像下面的例子：
+```go
+o := 0666
+fmt.Printf("%d %[1]o %#[1]o\n", o) // "438 666 0666"
+x := int64(0xdeadbeef)
+fmt.Printf("%d %[1]x %#[1]x %#[1]X\n", x)
+// Output:
+// 3735928559 deadbeef 0xdeadbeef 0XDEADBEEF
+```
+请注意fmt的两个使用技巧。通常Printf格式化字符串包含多个%参数时将会包含对应相同数量的额外操作数，
+- 但是%之后的\[1]副词告诉Printf函数再次使用**第一个操作数**。
+- 第二，%后的#副词告诉Printf在用`%o`、`%x`或`%X`输出时生成0、0x或0X前缀。
+
+
+字符使用%c参数打印，或者是用%q参数打印带单引号的字符：
+```go
+ascii := 'a'
+unicode := '国'
+newline := '\n'
+fmt.Printf("%d %[1]c %[1]q\n", ascii)   // "97 a 'a'"
+fmt.Printf("%d %[1]c %[1]q\n", unicode) // "22269 国 '国'"
+fmt.Printf("%d %[1]q\n", newline)       // "10 '\n'"
+```
+
+
+用Printf函数的%g参数打印浮点数，将采用更紧凑的表示形式打印，并提供足够的精度，但是对应表格的数据，使用%e（带指数）或%f的形式打印可能更合适.
+
+所有的这三个打印形式都可以指定打印的宽度和控制打印精度。
+```go
+for x := 0; x < 8; x++ {
+    //打印e的幂，打印精度是小数点后三个小数精度和8个字符宽度
+    fmt.Printf("x = %d e^x = %8.3f\n", x, math.Exp(float64(x)))
+}
+```
+
+
+### 浮点数
+Go语言提供了两种精度的浮点数，float32和float64。
+
+
+通常应该**优先使用float64类型**，因为float32类型的累计计算误差很容易扩散，并且float32能精确表示的正整数并不是很大。
+>（译注：因为float32的有效bit位只有23个，其它的bit位用于指数和符号；当整数大于23bit能表达的范围时，float32的表示将出现误差）：
+```go
+var f float32 = 16777216 // 1 << 24
+fmt.Println(f == f+1)    // "true"!
+```
+
+
+### 复数
+- Go语言提供了两种精度的复数类型：complex64和complex128，分别对应float32和float64两种浮点数精度。
+- 内置的complex函数用于构建复数，内建的**real和imag函数**分别返回复数的实部和虚部：
+```go
+var x complex128 = complex(1, 2) // 1+2i
+var y complex128 = complex(3, 4) // 3+4i
+fmt.Println(x*y)                 // "(-5+10i)"
+fmt.Println(real(x*y))           // "-5"
+fmt.Println(imag(x*y))           // "10"
+```
+- 如果一个浮点数面值或一个十进制整数面值后面跟着一个i，例如3.141592i或2i，它将构成一个复数的虚部，复数的实部是0：`fmt.Println(1i * 1i) // "(-1+0i)", i^2 = -1`
+- 复数也可以用==和!=进行相等比较。只有两个复数的实部和虚部都相等的时候它们才是相等的. 风险跟浮点数比较类似。
+
+
+### 布尔类型
+- 布尔值可以和&&（AND）和||（OR）操作符结合，并且**有短路行为**：如果运算符左边值已经可以确定整个布尔表达式的值，那么运算符右边的值将不再被求值。
+- **&&的优先级比||高**
+>（助记：&&对应逻辑乘法，||对应逻辑加法，乘法比加法优先级要高），下面形式的布尔表达式是不需要加小括弧的：
+```go
+if 'a' <= c && c <= 'z' ||
+    'A' <= c && c <= 'Z' ||
+    '0' <= c && c <= '9' {
+    // ...ASCII letter or digit...
+}
+```
+- 布尔值并**不会隐式转换为数字值0或1**，反之亦然。必须使用一个显式的if语句辅助转换
+
+
+### 字符串
+* 一个字符串是一个不可改变的字节序列。
+* 字符串可以包含任意的数据，包括byte值0，但是通常是用来包含人类可读的文本。
+* 内置的`len`函数可以返回一个字符串中的**字节数目**（**不是rune字符数目**），索引操作s[i]返回第i个字节的字节值，i必须满足0 ≤ i< len(s)条件约束。
+  * 第i个字节并不一定是字符串的第i个字符，因为对于非ASCII字符的UTF8编码会要两个或多个字节。
+* 子字符串操作s[i:j]基于原始的s字符串的第i个字节开始到第j个字节（并不包含j本身）生成一个新字符串。
+- 字符串**可以用==和<进行比较**；比较通过**逐个字节比较**完成的，因此比较的结果是**字符串自然编码的顺序**。
+
+
+
+**字符串不可变？**
+- 我们也可以给一个字符串变量分配一个新字符串值。下面代码：并不会导致原始的字符串值被改变，但是变量s将因为+=语句持有一个新的字符串值，但是t依然是包含原先的字符串值。
+```go
+s := "left foot"
+t := s
+s += ", right foot"
+
+fmt.Println(s) // "left foot, right foot"
+fmt.Println(t) // "left foot"
+```
+- s[0] = 'L' // compile error: cannot assign to s[0]
+
+
+
+#### **原生字符串**
+一个原生的字符串面值形式是`...`，使用反引号代替双引号。在原生的字符串面值中，没有转义操作；全部的内容都是字面的意思，包含退格和换行，因此一个程序中的原生字符串面值可能跨越多行。
+- 常用于编写正则表达式。
+
+
+#### **编码：Unicode和UTF-8**
+- Unicode码点对应Go语言中的rune整数类型（译注：rune是int32等价类型）。
+- UTF8是一个将Unicode码点编码为字节序列的变长编码。UTF8编码是由Go语言之父Ken Thompson和Rob Pike共同发明的，现在已经是Unicode的标准。
+- UTF8编码使用1到4个字节来表示每个Unicode码点，ASCII部分字符只使用1个字节，常用字符部分使用2或3个字节表示。
+  - 每个符号编码后第一个字节的高端bit位用于表示编码总共有多少个字节。
+    - 如果第一个字节的高端bit为0，则表示对应7bit的ASCII字符，ASCII字符每个字符依然是一个字节，和传统的ASCII编码兼容。
+    - 如果第一个字节的高端bit是110，则说明需要2个字节；后续的每个高端bit都以10开头， 后面更大的也是类似操作。
+    - 1110需要三个字节，11110需要四个字节，后面字节都是以10开头。
+
+
+变长的编码无法直接通过索引来访问第n个字符，但是UTF8编码获得了很多额外的优点：
+- 更加紧凑，完全兼容ASCII码，并且可以自动同步。
+- 可以通过向前回朔最多3个字节就能确定当前字符编码的开始字节的位置。
+- 它也是一个前缀编码，所以当从左向右解码时不会有任何歧义也并不需要向前查看
+- 没有任何字符的编码是其他字符编码的子串，因此搜索一个字符时只要搜索它的字节编码序列即可。
+- UTF8编码的顺序和Unicode码点的顺序一致，因此可以直接排序UTF8编码序列。
+- 同时因为没有嵌入的NUL(0)字节，可以很好地兼容那些使用NUL作为字符串结尾的编程语言。
+
+
+Go语言的源文件采用UTF8编码，并且Go语言处理UTF8编码的文本也很出色。unicode包提供了诸多处理rune字符相关功能的函数（比如区分字母和数字，或者是字母的大写和小写转换等），unicode/utf8包则提供了用于rune字符序列的UTF8编码和解码的功能。
+
+
+**字符串中字节数和字符数**：字符串包含13个字节，以UTF8形式编码，但是只对应9个Unicode字符：
+```go
+import "unicode/utf8"
+
+s := "Hello, 世界"
+fmt.Println(len(s))                    // "13"
+fmt.Println(utf8.RuneCountInString(s)) // "9"
+```
+- Go语言的range循环在处理字符串的时候，会自动隐式解码UTF8字符串。
+```go
+for i, r := range "Hello, 世界" {
+    fmt.Printf("%d\t%q\t%d\n", i, r, r)
+}
+```
+- UTF8字符串作为交换格式是非常方便的，但是在程序内部采用rune序列可能更方便，因为rune大小一致，支持数组索引和方便切割。
+
+
+#### 字符串处理和转换
+
+**字符串和Byte切片**
+
+
+- 标准库中有四个包对字符串处理尤为重要：bytes、strings、strconv和unicode包。
+  - strings包提供了许多如字符串的查询、替换、比较、截断、拆分和合并等功能。
+  - bytes包也提供了很多类似功能的函数，但是针对和字符串有着相同结构的[]byte类型。
+  - strconv包提供了布尔型、整型数、浮点数和对应字符串的相互转换，还提供了双引号转义相关的转换。
+  - unicode包提供了IsDigit、IsLetter、IsUpper和IsLower等类似功能，它们用于给字符分类。每个函数有一个单一的rune类型的参数，然后返回一个布尔值。
+
+
+- 实现一个将path文件路径简化成文件名（去掉前面目录和后缀）：
+```go
+func basename(s string) string {
+    slash := strings.LastIndex(s, "/") // -1 if "/" not found
+    s = s[slash+1:]
+    if dot := strings.LastIndex(s, "."); dot >= 0 {
+        s = s[:dot]
+    }
+    return s
+}
+```
+
+
+- **字符串和字节slice之间可以互相转换**
+```go
+s := "abc"
+b := []byte(s)
+s2 := string(b)
+```
+  - 需要确保在变量b被修改的情况下，原始的s字符串也不会改变。
+- strings包中的六个函数：（bytes包中也对应的六个函数，区别就是类型换成了字节slice类型）
+
+```go
+func Contains(s, substr string) bool
+func Count(s, sep string) int
+func Fields(s string) []string
+func HasPrefix(s, prefix string) bool
+func Index(s, sep string) int
+func Join(a []string, sep string) string
+
+```
+
+- bytes包还提供了Buffer类型用于字节slice的缓存。一个Buffer开始是空的，但是随着string、byte或[]byte等类型数据的写入可以动态增长，一个bytes.Buffer变量并不需要初始化，因为零值也是有效的
+```go
+// intsToString is like fmt.Sprint(values) but adds commas.
+func intsToString(values []int) string {
+    var buf bytes.Buffer
+    buf.WriteByte('[')
+    for i, v := range values {
+        if i > 0 {
+            buf.WriteString(", ")
+        }
+        fmt.Fprintf(&buf, "%d", v)
+    }
+    buf.WriteByte(']')
+    return buf.String()
+}
+
+func main() {
+    fmt.Println(intsToString([]int{1, 2, 3})) // "[1, 2, 3]"
+}
+```
+>bytes.Buffer类型有着很多实用的功能，我们在第七章讨论接口时将会涉及到，我们将看看如何将它用作一个I/O的输入和输出对象，例如当做Fprintf的io.Writer输出对象，或者当作io.Reader类型的输入源对象。
+
+
+**字符串与数字的转换**
+
+
+
+由strconv包提供这类转换功能。
+- 将一个整数转为字符串，一种方法是用fmt.Sprintf返回一个格式化的字符串；另一个方法是用strconv.Itoa(“整数到ASCII”)：
+```go
+  x := 123
+y := fmt.Sprintf("%d", x)
+fmt.Println(y, strconv.Itoa(x)) // "123 123"
+
+```
+- FormatInt和FormatUint函数可以**用不同的进制来格式化数字**：
+```go
+fmt.Println(strconv.FormatInt(int64(x), 2)) // "1111011"
+```
+
+- `fmt.Printf`函数的%b、%d、%o和%x等参数提供功能往往比strconv包的Format函数方便很多，特别是在需要**包含有附加额外信息**的时候：
+```go
+s := fmt.Sprintf("x=%b", x) // "x=1111011"
+```
+
+- 如果要将一个**字符串解析为整数**，可以使用strconv包的**Atoi或ParseInt**函数，还有用于解析无符号整数的ParseUint函数：
+```go
+x, err := strconv.Atoi("123")             // x is an int
+y, err := strconv.ParseInt("123", 10, 64) // base 10, up to 64 bits
+```
+  - ParseInt函数的第三个参数是用于指定整型数的大小；例如16表示int16，0则表示int。
+  - 在任何情况下，返回的结果y总是int64类型，你可以通过强制类型转换将它转为更小的整数类型。
+
+
+
+### 常量
+- 存储在常量中的数据类型只可以是布尔型、数字型(整数型、浮点型和复数)和字符串型。
+- 常量表达式的值在编译期计算，而不是在运行期。
+- 如果没有显式指明类型，那么将从右边的表达式推断类型。如果转换合法的话。
+    - 可以通过%T参数打印类型信息：fmt.Printf("%T %[1]v\n", noDelay)     // "time.Duration 0"
+    - 无类型整数常量转换为int，它的内存大小是不确定的，但是无类型浮点数和复数常量则转换为内存大小明确的float64和complex128。
+    - 如果要给变量一个不同的类型，我们必须显式地将无类型的常量转化为所需的类型，或给声明的变量指定明确的类型：var i = int8(0)
+
+
+#### iota 常量生成器
+常量声明可以使用iota常量生成器初始化，它用于生成一组以相**似规则初始化的常量**，但是不用每行都写一遍初始化表达式。
+- 比如星期、月份、年份
+- 在第一个声明的常量所在的行，**iota将会被置为0**，然后在每一个有常量声明的行加一。
+
+
+#### 无类型常量
+编译器为这些没有明确基础类型的数字常量**提供比基础类型更高精度的算术运算**；
+>你可以认为至少有256bit的运算精度。
+
+这里有六种未明确类型的常量类型，分别是无类型的布尔型、无类型的整数、无类型的字符、无类型的浮点数、无类型的复数、无类型的字符串。
+
+- 通过延迟明确常量的具体类型，无类型的常量不仅可以提供更高的运算精度，而且可以直接**用于更多的表达式而不需要显式的类型转换。**
+
+
+- 对于常量面值，**不同的写法可能会对应不同的类型**。
+>例如0、0.0、0i和\u0000虽然有着相同的常量值，但是它们分别对应无类型的整数、无类型的浮点数、无类型的复数和无类型的字符等不同的常量类型
+
+
+---
+
 
 ## 第四章 复合类型：数组和结构体
 
 从简单的数组、字典、切片到动态列表
 
 ### 定长数组 array
+数组是一个由**固定长度**的**特定类型**元素组成的序列，一个数组可以由零个或多个元素组成。
+>因为长度固定，而且没有任何添加或删除数组元素的方法。
+>Go语言中很少直接使用数组。 除了像SHA256这类需要处理特定大小数组的特例外。 一般用slice，但是要先理解数组。
+
+
+- 索引下标的范围是从0开始到数组长度减1的位置。内置的**len函数**将返回数组中**元素的个数**。
+- 在数组字面值中，如果在数组的长度位置出现的是“...”省略号，则表示数组的长度是根据初始化值的个数来计算。
+- `var r [3]int = [3]int{1, 2}`, 优先赋值前面的，r|[2]为默认值0
+- 长度是数组类型的组成部分，长度不同的数组，类型是不一样的。
+
+
+**初始化**：
+```go
+var r [3]int = [3]int{1, 2}
+fmt.Println(r[2]) // "0"
+
+s := [...]int{99: -1}
+```
+
+
+**比较**：
+如果一个数组的元素类型是可以相互比较的，那么数组类型也是可以相互比较的
+```go
+import "crypto/sha256"
+
+func main() {
+    c1 := sha256.Sum256([]byte("x"))
+    c2 := sha256.Sum256([]byte("X"))
+    //%x 十六进制的格式打印, %t布尔类型， %T对应的数据类型
+    fmt.Printf("%x\n%x\n%t\n%T\n", c1, c2, c1 == c2, c1)
+    // Output:
+    // 2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881
+    // 4b68ab3847feda7d6c62c1fbcbeebfa35eab7351ed5e78f4ddadea5df64b8015
+    // false
+    // [32]uint8
+}
+```
+
+
+**数组参数，值传递**：
+当调用一个函数的时候，函数的每个调用参数将会被赋值给函数内部的参数变量，所以函数参数变量接收的是一个复制的副本，并不是原始调用的变量。**而数组是值类型**，所以复制的数组改变不会影响外面。 如果是引用类型，那改变的就是复制进去的指针地址对应的值。
+
+
+当然，我们可以**显式地传入一个数组指针**，那样的话函数通过指针对数组的任何修改都可以直接反馈到调用者。
+```go
+func zero(ptr *[32]byte) {
+    *ptr = [32]byte{}
+}
+```
+
+
 
 
 ### 可变数组 slice
+- 每个元素类型相同，没有固定长度。
 - 是否可称为引用类型？ 有说可以叫指针结构的包装，比叫引用类型更严谨。
+
+
+#### 获取子序列
 - 用s[i]访问单个元素，用s[m:n]获取子序列。Go言里也采用左闭右开形式，0 ≤ m ≤ n ≤ len(s)，包含n-m个元素。
 
+如果切片操作超出cap(s)的上限将导致一个panic异常，但是超出len(s)则是意味着扩展了slice，因为**新slice的长度会变大**：
+```go
+months := [...]string{1: "January", /* 省略掉定义，自行补充 */, 12: "December"}
+summer := months[6:9]  //len:3 , cap:7
+
+fmt.Println(summer[:20]) // panic: out of range
+endlessSummer := summer[:5] // extend a slice (within capacity)
+fmt.Println(endlessSummer)  // "[June July August September October]"
+```
+
+- []byte是字节类型**切片**
+- 复制一个slice只是对底层的数组创建了一个新的slice别名
+
+
 #### 难点一： 长度len 和 容量cap
-**一个切片的容量总是固定的。**
+**一个切片的容量总是固定的。** slice的切片操作s[i:j]，其中0 ≤ i≤ j≤ cap(s)，用于创建一个**新的**slice。
+- 容量一般是从slice的**开始位置到底层数据的结尾**位置。
+- 内置的len和cap函数分别返回slice的长度和容量
 
 
 例子：
@@ -918,14 +1290,89 @@ s4 := s3[3:6]
 ```
 
 s3的长度和容量都是 8
-s4的长度/大小是3，**s4的容量是多少？**
+s4的长度（大小）是3，**s4的容量是多少？**
 - 切片的容量代表了它的底层数组的长度，但这仅限于使用make函数或者切片值字面量初始化切片的情况。
 - 更通用的规则是: 一个切片的容量可以被看作是透过这个窗口最多可以看到的底层数组中元素的个数。
   - 而在底层数组不变的情况下，切片代表的**窗口可以向右扩展，直至其底层数组的末尾**。
-    - 这里底层数组是最底层，哪怕slicea 从arr而来，sliceb从slicea而来。
+    - 这里底层数组是最底层，哪怕slicea 从arr而来，sliceB从sliceA而来。
 
+
+#### 比较
+* slice之间不能比较，因此我们不能使用==操作符来判断两个slice是否含有全部相等元素。
+>不过标准库提供了高度优化的bytes.Equal函数来判断两个字节型slice是否相等（[]byte）.
+
+- 对于其他类型的slice，我们必须自己展开每个元素进行比较,为啥不支持实现呢？
+  - 第一个原因，一个slice的元素是间接引用的，一个slice甚至可以包含自身（译注：当slice声明为[]interface{}时，slice的元素可以是自身）
+  - 第二个原因，因为slice的元素是间接引用的，一个固定的slice值（译注：指slice本身的值，不是元素的值）在不同的时刻可能包含不同的元素，因为**底层数组的元素可能会被修改**。
+
+
+* slice唯一合法的比较操作是和nil比较，与任意类型的nil值一样，我们可以用`[]int(nil)`类型转换表达式来生成一个对应类型slice的nil值.
+* 如果你需要测试一个slice是否是空的，使用len(s) == 0来判断，而不应该用s == nil来判断。
+
+
+#### make生成slice
+- 内置的make函数创建一个指定元素类型、长度和容量的slice。
+- 容量部分可以省略，在这种情况下，容量将等于长度。
+- 在底层，make创建了一个匿名的数组变量，然后返回一个slice；只有通过返回的slice才能引用底层匿名的数组变量。
+
+
+#### append函数
+内置的append函数用于向slice追加元素：`sliceA = append(sliceA, r)`。下面是第一个版本的appendInt函数，专门用于处理[]int类型的slice：
+```go
+func appendInt(x []int, y int) []int {
+    var z []int
+    zlen := len(x) + 1
+    if zlen <= cap(x) {
+        // There is room to grow.  Extend the slice.
+        z = x[:zlen]
+    } else {
+        // There is insufficient space.  Allocate a new array.
+        // Grow by doubling, for amortized linear complexity.
+        zcap := zlen
+        if zcap < 2*len(x) {
+            zcap = 2 * len(x)
+        }
+        z = make([]int, zlen, zcap)
+        //copy函数将返回成功复制的元素的个数,等于两个slice中较小的长度
+        copy(z, x) // a built-in function; see text
+    }
+    z[len(x)] = y
+    return z
+}
+```
+- 内置的append函数则可以追加多个元素，甚至追加一个slice。
+- 内置的append函数可能使用比appendInt更复杂的内存扩展策略。
+>因此，通常我们并不知道append调用是否导致了内存的重新分配，因此我们也**不能确认新的slice和原始的slice是否引用的是相同的底层数组空间**。同样，我们不能确认在原先的slice上的操作**是否会影响到新的slice**。
+
+因此，通常是将append返回的结果直接赋值给输入的slice变量：`sliceA = append(sliceA, r)`
+- 更新slice变量不仅对调用append函数是必要的，实际上对应任何可能导致长度、容量或底层数组变化的操作都是必要的。
+- 要正确地使用slice，需要记住尽管底层数组的元素是间接访问的，但是slice对应结构体本身的指针、长度和容量部分是直接访问的。
+- 要更新这些信息需要像上面例子那样一个显式的赋值操作。
+
+
+输入的slice和输出的slice共享一个底层数组。这可以避免分配另一个数组，不过原来的数据将可能会被覆盖，正如下面两个打印语句看到的那样：
+```go
+func main(){
+    data := []string{"one", "", "three"}
+    fmt.Printf("%q\n", nonempty(data)) // `["one" "three"]`
+    fmt.Printf("%q\n", data)           // `["one" "three" "three"]`
+}
+
+func nonempty(strings []string) []string {
+    i := 0
+    for _, s := range strings {
+        if s != "" {
+            strings[i] = s
+            i++
+        }
+    }
+    return strings[:i]
+}
+
+```
 
 #### 为啥要弄这种滑动窗口式的设计
+
 
 #### slice[2:] 省略掉的是len(slice)
 省略掉的：默认第一个序列是0，第二个是数组的长度，即等价于ar[0:len(ar)]
@@ -960,9 +1407,218 @@ sliceB[2] 会抛异常，超出边界。 长度只有2.
 
 
 
-### map[keyType]valueType
+#### 初始化和取值
+map[keyType]valueType
 - map的key，可以是int，可以是string及所有完全定义了==与!=操作的类型
-- 值则可以是任意类型
+  - 虽然浮点数类型也是支持相等运算符比较的，但是**将浮点数用做key类型则是一个坏的想法**，最坏的情况是可能出现的NaN和任何浮点数都不相等。
+- 值则可以是任意类型,但是键之间、值之间类型要相同。
+- 不要使用new，永远用make来构造map
+
+
+```go
+ages := make(map[string]int)
+ages := map[string]int{
+    "alice":   31,
+    "charlie": 34,
+}
+fmt.Println(ages["alice"]) // "32"
+delete(ages, "alice") // remove element ages["alice"]
+```
+
+
+- 即使map中不存在“bob”下面的代码也可以正常工作，因为ages["bob"]失败时将返回0。 如何
+```go
+ages["bob"] = ages["bob"] + 1 // happy birthday!
+```
+- map上的大部分操作，包括查找、删除、len和range循环都可以安全工作在nil值的map上，它们的行为和一个空的map类似。
+- 但是向一个nil值的map存入元素将导致一个panic异常：
+```go
+ages["carol"] = 21 // panic: assignment to entry in nil map
+```
+- 在向map存数据前必须先创建map。 声明了一个nil的map，如何再创建？ 再写一遍`ages = make(map[string]int, 10)`？
+- map下标获取值可选获取两个值： `age, ok := ages["bob"] 和  age := ages["bob"]`都是合法的？
+
+
+#### 用map实现set
+Go程序员将这种忽略value的map当作一个**字符串集合**。
+```go
+func main() {
+    seen := make(map[string]bool) // a set of strings
+    input := bufio.NewScanner(os.Stdin)
+    for input.Scan() {
+        line := input.Text()
+        if !seen[line] {
+            seen[line] = true
+            fmt.Println(line)
+        }
+    }
+
+    if err := input.Err(); err != nil {
+        fmt.Fprintf(os.Stderr, "dedup: %v\n", err)
+        os.Exit(1)
+    }
+}
+```
+
+
+### 结构体
+结构体是一种聚合的数据类型，是由零个或多个任意类型的值聚合成的实体。
+```go
+type Employee struct {
+    ID        int
+    Name      string
+    Address   string
+    DoB       time.Time
+    Position  string
+    Salary    int
+    ManagerID int
+}
+
+var dilbert Employee
+```
+
+**访问**：
+- 直接点操作符访问和赋值：`dilbert.Salary -= 5000`
+- 对成员取地址，然后通过指针访问：
+```go
+position := &dilbert.Position
+*position = "Senior " + *position
+```
+
+
+**点操作符也可以和指向结构体的指针一起工作：**
+```go
+var employeeOfTheMonth *Employee = &dilbert
+employeeOfTheMonth.Position += " (proactive team player)"
+//上一句相当于下面，为啥呢？？？
+(*employeeOfTheMonth).Position += " (proactive team player)"
+
+```
+
+
+**调用函数返回的是值，并不是一个可取地址的变量，所以不能直接用点操作符赋值**：
+```go
+func EmployeeByID(id int) *Employee { /* ... */ }
+
+fmt.Println(EmployeeByID(dilbert.ManagerID).Position) // "Pointy-haired boss"
+id := dilbert.ID
+//这个赋值操作是可行的，但如果把函数方法EmployeeByID的返回值改为Employee，那下面赋值语句就会报错。
+EmployeeByID(id).Salary = 0 // fired for... no real reason
+
+```
+
+
+**命名为S的结构体成员可以包含 *S指针成员**
+
+一个命名为S的结构体类型将不能再包含S类型的成员：因为一个聚合的值不能包含它自身。（该限制同样适用于数组。）
+但是S类型的结构体可以包含*S指针类型的成员，这可以让我们创建递归的数据结构，比如链表和树结构等。
+可以使用一个二叉树来实现一个插入排序：
+
+
+**空结构体**：
+写成struct{}，它的大小为0，也不包含任何信息，但是有时候依然是有价值的：
+
+
+#### 结构体字面量、声明初始化
+- 写法一：只有值，按照类型和顺序一一对应。 
+  - 缺点：如果做了调整，就需要修改代码。
+  - 一般用在： 定义结构体的包内部使用、或者较小的结构体重使用，这些结构体成员排列比较规则
+  - 比如：image.Point(x,y)、color。RGBA(red, green, blue, alpha)
+- 写法二：以成员名字和相应的值来初始化，可以包含**部分**或全部的成员
+  - 好处：没写的成员默认用零值，顺序不重要，切新增字段，老代码也就是默认零值，不用可以不改也不报错。
+
+
+**使用规则**：
+- 两种写法不能混用
+- 不能在外部包中用写法一来偷偷初始化结构体中**未导出**的成员。 **TODO：未验证**
+```go
+package p
+type T struct{ a, b int } // a and b are not exported
+
+package q
+import "p"
+var _ = p.T{a: 1, b: 2} // compile error: can't reference a, b
+var _ = p.T{1, 2}       // compile error: can't reference a, b
+```
+- 函数对结构体进行修改操作，必须传入指针；
+>因为在Go语言中，所有的函数参数都是值拷贝传入的，函数参数将不再是函数调用时的原始变量。
+- 初始化一个结构体变量（下面三种写法等价）：
+```go
+//这个写法可以直接在表达式中使用，比如一个函数调用
+pp := &Point{1, 2}
+
+pp := new(Point)
+*pp = Point{1, 2}
+```
+
+
+#### 结构体嵌入和匿名成员
+```go
+type Point struct {
+    X, Y int
+}
+
+type Circle struct {
+    Center Point
+    Radius int
+}
+
+type Wheel struct {
+    Circle Circle
+    Spokes int
+}
+```
+- 结构体类型清晰，但是访问每个成员变量变得繁琐，需要多级。w.Circle.Center.Y = 8
+
+
+**如何解决访问繁琐的问题？**
+- **匿名成员**：只声明一个成员对应的数据类型而不指名成员的名字
+  - 匿名成员的数据类型必须是命名的类型或指向一个命名的类型的指针。
+  - 
+```go
+type Point struct {
+    X, Y int
+}
+
+type Circle struct {
+    Point
+    Radius int
+}
+
+type Wheel struct {
+    Circle
+    Spokes int
+}
+```
+- **匿名嵌入的特性**是啥？ 可以让我们直接访问叶子属性：`w.X = 8 //equivalent to w.Circle.Point.Y = 8`
+  - 匿名成员Circle和Point都有自己的名字——就是**命名的类型名字**——但是这些名字在点操作符中是可选的
+  - 不能同时包含两个类型相同的匿名成员，这会导致名字冲突。
+  - 包内Point和Circle匿名成员都是导出的。即使它们不导出（比如结构名改成小写字母开头的point和circle）。但是在包外部，因为circle和point没有导出，不能访问它们的成员
+- 但是匿名成员就没法用下面方式进行声明初始化了：
+```go
+w = Wheel{8, 8, 5, 20}                       // compile error: unknown fields
+w = Wheel{X: 8, Y: 8, Radius: 5, Spokes: 20} // compile error: unknown fields
+```
+需要写成下面这样：
+```go
+w = Wheel{Circle{Point{8, 8}, 5}, 20}
+
+w = Wheel{
+    Circle: Circle{
+        Point:  Point{X: 8, Y: 8},
+        Radius: 5,
+    },
+    Spokes: 20, // NOTE: 这个逗号是必须的
+}
+
+// Printf函数中%v参数包含的#副词，它表示用和Go语言类似的语法打印值。对于结构体类型来说，将包含每个成员的名字。
+fmt.Printf("%#v\n", w)  //Wheel{Circle:Circle{Point:Point{X:8, Y:8}, Radius:5}, Spokes:20}
+```
+
+
+**匿名成员还有其他好处嘛？**为什么要嵌入一个没有任何子成员类型的匿名成员类型呢？
+- 匿名成员并不要求是结构体类型；其实任何命名的类型都可以作为结构体的匿名成员。
+- **匿名类型的方法集**：简短的点运算符语法除了访问匿名成员嵌套的成员，还可以访问它们的方法。这个机制可以用于**将一些有简单行为的对象组合成有复杂行为的对象**。组合是Go语言中面向对象编程的核心
 
 
 
@@ -970,29 +1626,24 @@ sliceB[2] 会抛异常，超出边界。 长度只有2.
 >引用类型包括指针（§2.3.2）、切片（§4.2)）、字典（§4.3）、函数（§5）、通道（§8）,它们都是对程序中一个变量或状态的间接引用。这意味着对任一引用类型数据的修改都会影响所有该引用的拷贝。
 
 
-# Go语言特性
->接口、并发、包、测试和反射等语言特性。
-
-Go语言的面向对象机制与一般语言不同。
-- 它没有类层次结构，甚至可以说没有类；
-- 仅仅通过组合（而不是继承）简单的对象来构建复杂的对象。
-- 方法不仅可以定义在结构体上，而且，可以定义在任何用户自定义的类型上；
-- 并且，具体类型和抽象类型（接口）之间的关系是隐式的，
-
->所以很多类型的设计者可能并不知道该类型到底实现了哪些接口。
 
 ## 第六章 方法
+
 
 
 
 ## 第七章 接口
 
 
-## 第八章 并发编程（一）基于顺序通信进程（CSP）
 
+
+## 第八章 并发编程（一）基于顺序通信进程（CSP）
 使用goroutines和channels处理并发编程
 
+
+
 ## 第九章 并发编程（二）传统的基于共享变量
+
 
 
 ## 第十章 包机制和包的组织结构
@@ -1000,13 +1651,18 @@ Go语言的面向对象机制与一般语言不同。
 
 这一章还展示了如何有效地利用Go自带的工具，使用单个命令完成编译、测试、基准测试、代码格式化、文档以及其他诸多任务。
 
+
+
 ## 第十一章 单元测试
 Go语言的工具和标准库中集成了轻量级的测试功能，避免了强大但复杂的测试框架。测试库提供了一些基本构件，必要时可以用来构建复杂的测试构件。
 
 
+
 ## 第十二章 反射
 
-一种程序在运行期间审视自己的能力。反射是一个强大的编程工具，不过要谨慎地使用；这一章利用反射机制实现一些重要的Go语言库函数，展示了反射的强大用法
+一种程序在运行期间审视自己的能力。反射是一个强大的编程工具，不过要谨慎地使用；这一章利用反射机制实现一些重要的Go语言库函数，展示了反射的强大用法。
+
+
 
 ## 第十三章 底层编程的细节
 
