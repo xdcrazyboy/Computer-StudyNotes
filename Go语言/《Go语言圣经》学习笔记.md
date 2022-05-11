@@ -1621,6 +1621,206 @@ fmt.Printf("%#v\n", w)  //Wheel{Circle:Circle{Point:Point{X:8, Y:8}, Radius:5}, 
 - **匿名类型的方法集**：简短的点运算符语法除了访问匿名成员嵌套的成员，还可以访问它们的方法。这个机制可以用于**将一些有简单行为的对象组合成有复杂行为的对象**。组合是Go语言中面向对象编程的核心
 
 
+### JSON
+Go语言对于这些标准格式的编码和解码都有良好的支持，由标准库中的encoding/json、encoding/xml、encoding/asn1等包提供支持
+>Protocol Buffers的支持由 github.com/golang/protobuf 包提供），并且这类包都有着相似的API接口。
+
+
+**JSON与go基础类型、对象的对应表示**：
+```go
+boolean         true
+number          -273.15
+string          "She said \"Hello, BF\""
+array           ["gold", "silver", "bronze"]
+object          {"year": 1980,
+                 "event": "archery",
+                 "medals": ["gold", "silver", "bronze"]}
+```
+
+
+**定义**
+```go
+type Movie struct {
+    Title  string
+    Year   int  `json:"released"`  //一个结构体成员Tag是和在编译阶段关联到该成员的元信息字符串
+    Color  bool `json:"color,omitempty"` //json串这个字段的field是 color； 
+                                        // omitempty 当Go语言结构体成员为空或零值时不生成该JSON对象(只是这个字段不生成)
+    Actors []string
+}
+
+//该函数有两个额外的字符串参数用于表示每一行输出的前缀和每一个层级的缩进：
+data, err := json.MarshalIndent(movies, "", "    ")
+
+//下面的代码将JSON格式的电影数据解码为一个结构体slice，结构体中只有Title成员。
+//通过定义合适的Go语言数据结构，我们可以选择性地解码JSON中感兴趣的成员。
+var titles []struct{ Title string }
+if err := json.Unmarshal(data, &titles); err != nil {
+    log.Fatalf("JSON unmarshaling failed: %s", err)
+}
+fmt.Println(titles) // "[{Casablanca} {Cool Hand Luke} {Bullitt}]"
+```
+- Go => JSON, 叫**编组**（marshaling）
+- JSON => Go，叫**解码**（Unmarshal）
+
+
+
+**应用**
+- 许多web服务都提供JSON接口，通过HTTP接口发送JSON格式请求并返回JSON格式的信息。
+  - 第一步：定义结构
+  - 第二步：定义方法，处理结构体，编码解码
+  - 第三步：调用方法
+```go
+//gopl.io/ch4/github
+const IssuesURL = "https://api.github.com/search/issues"
+
+type IssuesSearchResult struct {
+	TotalCount int `json:"total_count"`
+	Items      []*Issue
+}
+
+type Issue struct {
+	Number    int
+	HTMLURL   string `json:"html_url"`
+	Title     string
+	State     string
+	User      *User
+	CreatedAt time.Time `json:"created_at"`
+	Body      string    // in Markdown format
+}
+
+type User struct {
+	Login   string
+	HTMLURL string `json:"html_url"`
+}
+
+// SearchIssues queries the GitHub issue tracker.
+func SearchIssues(terms []string) (*IssuesSearchResult, error) {
+	q := url.QueryEscape(strings.Join(terms, " "))
+	resp, err := http.Get(IssuesURL + "?q=" + q)
+	if err != nil {
+		return nil, err
+	}
+
+	// We must close resp.Body on all execution paths.
+	// (Chapter 5 presents 'defer', which makes this simpler.)
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("search query failed: %s", resp.Status)
+	}
+
+	var result IssuesSearchResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		resp.Body.Close()
+		return nil, err
+	}
+	resp.Body.Close()
+	return &result, nil
+}
+
+//gopl.io/ch4/issues
+func main() {
+    result, err := github.SearchIssues(os.Args[1:])
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("%d issues:\n", result.TotalCount)
+    for _, item := range result.Items {
+        fmt.Printf("#%-5d %9.9s %.55s\n",
+            item.Number, item.User.Login, item.Title)
+    }
+}
+```
+-  https://developer.github.com/v3/ 
+-  https://xkcd.com/571/info.0.json 请求将返回一个很多人喜爱的571编号的详细描述。下载每个链接（只下载一次）然后创建一个离线索引。编写一个xkcd工具，使用这些离线索引，打印和命令行输入的检索词相匹配的漫画的URL。
+-  检索和下载 https://omdbapi.com/ 上电影的名字和对应的海报图像。编写一个poster工具，通过命令行输入的电影名字，下载对应的海报。
+
+
+### 文本和HTML模板
+
+- 一个模板是一个字符串或一个文件，连包含了一个或多个由双花括号包含的`{{action}}`对象。
+- 大部分的字符串只是按字面值打印，但是对于actions部分将触发其它的行为.
+- 模板语言包含通过选择结构体的成员、调用函数或方法、表达式控制流if-else语句和range循环语句，还有其它实例化模板等诸多特性
+
+#### 模板字符串
+```go
+const templ = `{{.TotalCount}} issues:
+{{range .Items}}----------------------------------------
+Number: {{.Number}}
+User:   {{.User.Login}}
+Title:  {{.Title | printf "%.64s"}}
+Age:    {{.CreatedAt | daysAgo}} days
+{{end}}`
+```
+- 对于每一个action，都有一个当前值的概念，对应点操作符，写作“.”。
+- 当前值“.”**最初被初始化为调用模板时的参数**，在当前例子中对应github.IssuesSearchResult类型的变量。
+- 模板中`{{range .Items}}和{{end}}`对应一个循环action，每次迭代的当前值对应当前的Items元素的值。
+- `|`操作符表示将前一个表达式的结果作为后一个函数的输入，类似于UNIX中管道的概念。
+  >`printf`一个基于fmt.Sprintf实现的内置函数，所有模板都可以直接使用。 
+
+```go
+// 先创建并返回一个模板；
+report, err := template.New("report").
+    Funcs(template.FuncMap{"daysAgo": daysAgo}). // Funcs方法将daysAgo等自定义函数注册到模板中，并返回模板；
+    Parse(templ)  //调用Parse函数分析模板
+if err != nil {
+    log.Fatal(err)
+}
+
+// template.Must辅助函数可以简化这个致命错误的处理：它接受一个模板和一个error类型的参数，检测error是否为nil（如果不是nil则发出panic异常），然后返回传入的模板。
+var report = template.Must(template.New("issuelist").
+    Funcs(template.FuncMap{"daysAgo": daysAgo}).
+    Parse(templ))
+
+//使用github.IssuesSearchResult作为输入源、os.Stdout作为输出源来执行模板：
+func main() {
+    result, err := github.SearchIssues(os.Args[1:])
+    if err != nil {
+        log.Fatal(err)
+    }
+    if err := report.Execute(os.Stdout, result); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+  
+
+#### HTML模板
+- html/template包已经自动将特殊字符转义
+- 如果不想被转义，可以把对应字符串定义到信任的template.HTML字符串类型，最终生成的html文件就不会转义这个字段的字符串。
+```go
+import "html/template"
+
+var issueList = template.Must(template.New("issuelist").Parse(`
+<h1>{{.TotalCount}} issues</h1>
+<table>
+<tr style='text-align: left'>
+  <th>#</th>
+  <th>State</th>
+  <th>User</th>
+  <th>Title</th>
+</tr>
+{{range .Items}}
+<tr>
+  <td><a href='{{.HTMLURL}}'>{{.Number}}</a></td>
+  <td>{{.State}}</td>
+  <td><a href='{{.User.HTMLURL}}'>{{.User.Login}}</a></td>
+  <td><a href='{{.HTMLURL}}'>{{.Title}}</a></td>
+</tr>
+{{end}}
+</table>
+`))
+
+func main() {
+	result, err := github.SearchIssues(os.Args[1:])
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := issueList.Execute(os.Stdout, result); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
 
 ## 第五章 函数、错误处理、panic、recover、有defer语句。
 >引用类型包括指针（§2.3.2）、切片（§4.2)）、字典（§4.3）、函数（§5）、通道（§8）,它们都是对程序中一个变量或状态的间接引用。这意味着对任一引用类型数据的修改都会影响所有该引用的拷贝。
@@ -1647,9 +1847,18 @@ fmt.Printf("%#v\n", w)  //Wheel{Circle:Circle{Point:Point{X:8, Y:8}, Radius:5}, 
 
 
 ## 第十章 包机制和包的组织结构
+>这一章还展示了如何有效地利用Go自带的工具，使用单个命令完成编译、测试、基准测试、代码格式化、文档以及其他诸多任务。
 
 
-这一章还展示了如何有效地利用Go自带的工具，使用单个命令完成编译、测试、基准测试、代码格式化、文档以及其他诸多任务。
+- Go语言标准包200多个（查看命令：go list std | wc -l）
+- 目前互联网上已经发布了非常多的Go语言开源包，它们可以通过 http://godoc.org 检索
+
+
+Go语言的**闪电**般的**编译速度主要得益于**三个语言特性。
+1. 第一点，所有导入的包必须在每个文件的开头显式声明，这样的话编译器就没有必要读取和分析整个源文件来判断包的依赖关系。
+2. 第二点，禁止包的环状依赖，因为没有循环依赖，包的依赖关系形成一个有向无环图，每个包可以被独立编译，而且很可能是被并发编译。
+3. 第三点，编译后包的目标文件不仅仅记录包本身的导出信息，目标文件同时还记录了包的依赖关系。
+>在编译一个包的时候，编译器只需要读取每个直接导入包的目标文件，而不需要遍历所有依赖的的文件（译注：很多都是重复的间接依赖）。
 
 
 
