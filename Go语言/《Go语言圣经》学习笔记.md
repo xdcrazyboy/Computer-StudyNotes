@@ -152,6 +152,8 @@ func main() {
 >后缀f指format，ln指line
 - 以字母`f`结尾的格式化函数: 如`log.Printf`和`fmt.Errorf`，都采用fmt.Printf的格式化准则。
 - 以`ln`结尾的格式化函数: 则遵循Println的方式，以跟`%v`差不多的方式格式化参数，并在最后添加一个换行符
+- 带#
+- 带+，输出字段名
 
 
 
@@ -1626,6 +1628,439 @@ fmt.Printf("%#v\n", w)  //Wheel{Circle:Circle{Point:Point{X:8, Y:8}, Radius:5}, 
 >引用类型包括指针（§2.3.2）、切片（§4.2)）、字典（§4.3）、函数（§5）、通道（§8）,它们都是对程序中一个变量或状态的间接引用。这意味着对任一引用类型数据的修改都会影响所有该引用的拷贝。
 
 
+**简写**：
+```go
+//以下语句等价
+func f(i, j, k int, s, t string)                 { /* ... */ }
+func f(i int, j int, k int,  s string, t string) { /* ... */ }
+
+func first(x int, _ int) int { return x }
+fmt.Printf("%T\n", first) // "func(int, int) int" 类型
+```
+
+- 函数的类型被称为函数的签名。
+  - 如果两个函数**形式参数列表和返回值列表中的变量类型**一一对应，那么这两个函数被认为**有相同的类型或签名**。
+  - 形参和返回值的**变量名不影响函数签名**，也不影响它们是否可以以省略参数类型的形式表示。
+>每一次函数调用都必须按照声明顺序为所有参数提供实参（参数值）。
+>在函数调用时，Go语言**没有默认参数值**，也没有任何方法可以通过参数名指定形参，因此形参和返回值的变量名对于函数调用者而言没有意义。
+
+- **实参通过值的方式传递**，因此函数的形参是实参的拷贝。对形参进行修改不会影响实参。
+- 但是，如果**实参包括引用类型**，如指针，slice(切片)、map、function、channel等类型，实参可能会由于函数的间接引用**被修改**。
+
+- 没有函数体的函数声明：表示该函数不是以Go实现的
+
+
+### 递归
+```go
+//!+
+func main() {
+	for _, url := range os.Args[1:] {
+		links, err := findLinks(url)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "findlinks2: %v\n", err)
+			continue
+		}
+		for _, link := range links {
+			fmt.Println(link)
+		}
+	}
+}
+
+
+// findLinks performs an HTTP GET request for url, parses the
+// response as HTML, and extracts and returns the links.
+func findLinks(url string) ([]string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("getting %s: %s", url, resp.Status)
+	}
+	doc, err := html.Parse(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s as HTML: %v", url, err)
+	}
+	return visit(nil, doc), nil
+}
+
+
+// visit appends to links each link found in n, and returns the result.
+func visit(links []string, n *html.Node) []string {
+	if n.Type == html.ElementNode && n.Data == "a" {
+		for _, a := range n.Attr {
+			if a.Key == "href" {
+				links = append(links, a.Val)
+			}
+		}
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		links = visit(links, c)
+	}
+	return links
+}
+
+```
+
+- 在findlinks中，我们必须确保resp.Body被关闭，释放网络资源。虽然**Go的垃圾回收机制**会回收不被使用的内存，但是这**不包括操作系统层面的资源，比如打开的文件、网络连接**。因此我们必须显式的释放这些资源。
+- 一个函数内部可以将另一个有多返回值的函数调用作为返回值，下面的例子展示了与findLinks有相同功能的函数。
+```go
+func findLinksLog(url string) ([]string, error) {
+    log.Printf("findLinks %s", url)
+    return findLinks(url)
+}
+```
+- 如果一个函数**所有的返回值都有显式的变量名**，那么该函数的**return语句可以省略操作数*。这称之为bare return。
+  - 但是使得代码难以被理解。
+  - 用在卫语句挺合适，还没赋值的就是默认零值。 Go会将返回值 words和images在函数体的开始处，根据它们的类型，将其初始化为0。
+```go
+func CountWordsAndImages(url string) (words, images int, err error) {
+    resp, err := http.Get(url)
+    if err != nil {
+        return
+    }
+    doc, err := html.Parse(resp.Body)
+    resp.Body.Close()
+    if err != nil {
+        err = fmt.Errorf("parsing HTML: %s", err)
+        return
+    }
+    words, images = countWordsAndImages(doc)
+    return
+}
+func countWordsAndImages(n *html.Node) (words, images int) { /* ... */ }
+```
+
+### 错误
+>一个良好的程序永远不应该发生panic异常。
+
+- 如果导致失败的原因只有一个，额外的返回值可以是一个布尔值，通常被命名为**ok**。
+  >比如，cache.Lookup失败的唯一原因是key不存在。 比如map获取值。
+- error类型可能是nil或者non-nil。
+  - nil意味着函数运行成功，non-nil表示失败。
+  - 对于non-nil的error类型，我们可以通过调用error的Error函数或者输出函数获得字符串类型的错误信息。`fmt.Printf("%v", err)`
+  - 当函数返回non-nil的error时，其他的返回值是未定义的（undefined），这些未定义的返回值应该被忽略。
+  - 有少部分函数在发生错误时，仍然会返回一些有用的返回值。比如，当读取文件发生错误时，Read函数会返回可以读取的字节数以及错误信息。 **应该是先处理这些不完整的数据，再处理错误**
+  - Go语言将函数运行失败时返回的错误信息当做一种预期的值，而不是异常。 而Go对于异常处理是针对哪些未被预料到的错误。panic？bug？
+  - Go使用控制流机制（如if和return）处理错误，这使得编码人员能更多的关注错误处理。
+
+
+**错误处理策略**
+
+1. 传播错误
+  - 要增加必要的上下文，再传播到上游。
+    ```go
+    if err != nil {
+        return nil, fmt.Errorf("parsing %s as HTML: %v", url,err)
+    }    
+    ```
+  - 由于错误信息经常是以链式组合在一起的，所以错误信息中应**避免大写和换行符**。
+  - 要注意**错误信息表达的一致性**，即相同的函数或同包内的同一组函数返回的错误在构成和处理方式上是相似的。
+    >一般而言，被调用函数f(x)会将调用信息和参数信息作为发生错误时的上下文放在错误信息中并返回给调用者，调用者需要**添加一些错误信息中不包含的信息**，比如添加url到html.Parse返回的错误中。
+2. 重新尝试失败的操作
+  - 什么情况下用？如果错误的发生是偶然性的，或由不可预知的问题导致的。
+  - 注意事项？ 限定重试时间间隔或重试次数
+```go
+func WaitForServer(url string) error {
+    const timeout = 1 * time.Minute
+    deadline := time.Now().Add(timeout)
+    for tries := 0; time.Now().Before(deadline); tries++ {
+        _, err := http.Head(url)
+        if err == nil {
+            return nil // success
+        }
+        log.Printf("server not responding (%s);retrying…", err)
+        time.Sleep(time.Second << uint(tries)) // exponential back-off
+    }
+    return fmt.Errorf("server %s failed to respond after %s", url, timeout)
+}
+```
+
+3. 输出错误信息并**结束程序**
+   - 注意的是，这种策略只应在main中执行。
+   - 对库函数而言，应仅向上传播错误，除非该错误意味着程序内部包含不一致性，即遇到了bug，才能在库函数中结束程序。
+
+```go
+// (In function main.)
+if err := WaitForServer(url); err != nil {
+    fmt.Fprintf(os.Stderr, "Site is down: %v\n", err)
+    os.Exit(1)
+}
+
+//等价于
+if err := WaitForServer(url); err != nil {
+    log.Fatalf("Site is down: %v\n", err)
+}
+```
+
+
+4. 只输出错误信息。 不中断也不往上传，使用log打印错误
+```go
+if err := Ping(); err != nil {
+    log.Printf("ping failed: %v; networking disabled",err)
+}
+```
+>log包中的所有函数会为没有换行符的字符串增加换行符。
+
+
+5. 直接忽略掉错误。
+   - 当你决定忽略某个错误时，你应该清晰地写下你的意图
+   - 比如删除临时目录，有定时任务兜底，你主动删除操作失败也无所谓，就可以不处理删除失败的情况。
+
+
+**文件结尾错误（EOF）**
+
+
+- io包保证任何由文件结束引起的读取失败都返回同一个错误——io.EOF
+```go
+if err == io.EOF {
+        break // finished reading
+    }
+```
+
+
+**函数值**
+
+
+- 函数值：被作为参数的函数，可以带有参数值（就是带着行为的状态？）。
+- 函数类型的零值是nil。调用值为nil的函数值会引起panic错误。
+- 函数值可以与nil比较，但是函数值之间是不可比较的，也不能用函数值作为map的key。
+
+```go
+ var f func(int) int
+ f(3) // 此处f的值为nil, 会引起panic错误
+
+  if f != nil {
+        f(3)
+   }
+```
+- 通过行为来参数化函数：下面的`strings.Map`对字符串中的每个字符调用add1函数，并将每个add1函数的返回值组成一个新的字符串返回给调用者。
+```go
+func add1(r rune) rune { return r + 1 }
+
+fmt.Println(strings.Map(add1, "HAL-9000")) // "IBM.:111"
+```
+
+
+### 匿名函数
+>拥有函数名的函数只能在包级语法块中被声明
+**匿名函数**： 通过函数字面量（是一种表达式，就是函数声明func后不带函数名，而是直接func()）语法可以在任何表达式中表示一个函数值。 
+```go
+strings.Map(func(r rune) rune { return r + 1 }, "HAL-9000")
+```
+
+- 更为**重要**的是，通过这种方式定义的函数可以访问完整的**词法环境**（lexical environment），这意味着**在函数中定义的内部函数可以引用该函数的变量**。
+>不是很理解这个意味着有啥特别？ 啥场景？ 很难嘛？之前不支持？ **看代码吧**
+```go
+// squares返回一个匿名函数。
+// 该匿名函数每次被调用时都会返回下一个数的平方。
+func squares() func() int {
+    var x int
+    return func() int {
+        x++
+        return x * x
+    }
+}
+func main() {
+    f := squares()
+    fmt.Println(f()) // "1"
+    fmt.Println(f()) // "4"
+    fmt.Println(f()) // "9"
+    fmt.Println(f()) // "16"
+}
+```
+- 为啥每次调用值不一样?squares（）里的局部变量不是每次调用`f()匿名函数`就会归零？
+  - 第二次调用squares时，会生成第二个x变量，并返回一个新的匿名函数。新匿名函数操作的是第二个x变量。 为啥第二个x变量初始值是1？
+- **squares的例子证明，函数值不仅仅是一串代码，还记录了状态**。
+- 在squares中定义的匿名内部函数可以访问和更新squares中的局部变量，这意味着**匿名函数和squares中，存在变量引用**。
+- 这就是**函数值**属于引用类型和函数值不可比较的原因。Go使用闭包（closures）技术实现**函数值**，Go程序员也**把函数值叫做闭包**。
+  >这函数值是啥，越来越糊涂了？
+- 这个例子展示了：**变量的生命周期不由它的作用域决定**：squares返回后，变量x仍然隐式的存在于f中。
+
+
+**网页抓取的核心问题就是如何遍历图**。
+- 在topoSort的例子中，已经展示了深度优先遍历，在网页抓取中，我们会展示如何用广度优先遍历图。
+
+
+**警告：捕获迭代变量**
+
+>介绍Go词法作用域的一个陷阱
+
+需求：创建一些目录，然后将目录删除。
+- 没问题的代码：
+  - 为什么要在循环体中用循环变量d赋值一个新的局部变量，为什么要在循环体中用循环变量d赋值一个新的局部变量？ 后面一种是错误的
+```go
+//没问题的
+var rmdirs []func()  //方法切片
+for _, d := range tempDirs() {
+    dir := d // NOTE: necessary!
+    os.MkdirAll(dir, 0755) // creates parent directories too
+    rmdirs = append(rmdirs, func() {
+        os.RemoveAll(dir)
+    })
+}
+
+// ...do some work…
+for _, rmdir := range rmdirs {
+    rmdir() // clean up
+}
+```
+- 有问题的
+```go
+var rmdirs []func()
+for _, dir := range tempDirs() {
+    os.MkdirAll(dir, 0755)
+    rmdirs = append(rmdirs, func() {
+        os.RemoveAll(dir) // NOTE: incorrect! 这一步是把的dir传入函数中作为函数的变量？存起来了
+    })
+}
+// ...do some work…
+for _, rmdir := range rmdirs {
+    rmdir() // clean up
+}
+```
+- for循环语句引入了新的词法块，循环变量dir在这个词法块中被声明。
+- 在该循环中生成的所有**函数值**（带参数的函数？）都共享相同的循环变量
+- **注意**：函数值中记录的是循环变量的**内存地址**，而不是循环变量某一时刻的值。
+- 以dir为例，后续的迭代会不断更新dir的值，**当删除操作执行时，for循环已完成**，dir中存储的值等于最后一次迭代的值。
+- 这意味着，每次对os.RemoveAll的调用删除的都是相同的目录。 
+
+
+### 可变参数
+参数数量可变的函数称为可变参数函数。
+- 需要在参数列表的最后一个**参数类型之前**加上省略符号“...”
+- 调用者**隐式的创建一个数组**，并将原始参数复制到数组中，再把数组的一个切片作为参数传给被调用函数。
+- 可以使用range去遍历它，那如果可变参数的类型就是一个切片呢？ 相当于传了个二维切片，可以两次for循环遍历。
+```go
+values := []int{1, 2, 3, 4}
+fmt.Println(sum(values...)) // "10"
+//等价于下面的
+fmt.Println(sum(1, 2, 3, 4)) // "10"
+```
+
+
+**用处**：
+- 可变参数函数经常被用于格式化字符串。 format后面带的多个参数。
+
+
+### defer函数
+- 当执行到该条语句时，**函数和参数表达式得到计算**，但直到包含该defer语句的函数执行完毕时，**defer后的函数**才会被执行。 （看下面的例子，似乎是defer最后的return是最后执行，其他的都是在经过时运行？）
+  >不太理解函数和参数表达式得到计算是什么意思？ defer语句里面带的函数和表达式先计算了？ 那不就是执行了嘛？ 还是主函数流程？ defer后的函数是啥
+  **！！！测试发现**：defer后面的函数里面只要有return语句，那return之前的语句会执行（比如打印进入函数的时间），会停留大return位置，当原函数结束时执行return；
+  - 测试的方法是**返回一个函数**符合上面的说法，如果返回int呢？ 
+  - **这里要注意一个细节：** `defer trace("bigSlowOperation")()`后面的圆括号，表示前面部分返回必须为一个func然后方便带上()? 返回int这么写会报错，可以去掉圆括号，那么就不会报错，但是整个`trace("bigSlowOperation")`都会在原函数结束时执行.
+
+
+- 不论包含defer语句的函数是通过return正常结束，还是由于panic导致的异常结束。
+- 可以在一个函数中执行多条defer语句，它们的执行顺序与声明顺序**相反**。经过一条defer语句就入栈，最后执行时是出栈这些defer语句。
+- **常被用于**处理**成对**的操作，如打开、关闭、连接、断开连接、加锁、释放锁。
+
+
+调试复杂程序时，defer机制也常被**用于记录何时进入和退出函数**。
+```go
+func bigSlowOperation() {
+    defer trace("bigSlowOperation")() // don't forget the extra parentheses
+    // ...lots of work…
+    time.Sleep(10 * time.Second) // simulate slow operation by sleeping
+}
+func trace(msg string) func() {
+    start := time.Now()
+    log.Printf("enter %s", msg)
+    return func() { 
+        log.Printf("exit %s (%s)", msg,time.Since(start)) 
+    }
+}
+```
+
+>注意一点：不要忘记defer语句后的**圆括号**，否则本该在进入时执行的操作会在退出时执行，而本该在退出时执行的，永远不会被执行。
+
+
+defer语句中的函数会在return语句更新返回值变量后再执行，又因为在函数中定义的匿名函数可以访问该函数**包括返回值变量在内的所有变量**.
+所以，对匿名函数采用defer机制，可以使其**观察函数的返回值**。 就是在defer里打印出来？对于有许多return语句的函数而言，这个技巧很有用。
+
+
+defer后面的函数可以修改 命名的返回值。
+
+
+for循环里面，不断打开file，只定义一个defer，可能出现打开太多，用满文件描述符。 解决办法： 将打开操作抽象出一个函数，在函数里定义defer，那每次打开就会及时关闭，再打开下一个。
+
+
+### Panic异常
+- 一般会将panic异常和日志信息一并记录。
+- 直接调用内置的panic函数也会引发panic异常；panic函数接受任何值作为参数。
+- 当某些不应该发生的场景发生时，我们就应该调用panic。比如，当程序到达了某条逻辑上不可能到达的路径：
+>在健壮的程序中，任何可以预料到的错误，如不正确的输入、错误的配置或是失败的I/O操作都应该被优雅的处理
+
+**panic的适用场景与其他语言Exception的区别**
+- panic一般用于严重错误，如程序内部的逻辑不一致。 优先使用错误处理机制，而不是panic。
+
+
+**在Go的panic机制中，延迟函数的调用在释放堆栈信息之前。**
+- 如何使程序从panic异常中恢复，阻止程序的崩溃。?
+>为了方便诊断问题，runtime包允许程序员输出堆栈信息。在下面的例子中，我们通过在main函数中延迟调用printStack输出堆栈信息。 就是defer捕获，然后优雅的输出panic等错误信息
+```go
+func main() {
+    defer printStack()
+    f(3)
+}
+func printStack() {
+    var buf [4096]byte
+    n := runtime.Stack(buf[:], false)
+    os.Stdout.Write(buf[:n])
+}
+```
+
+
+### Recover捕获异常
+> 一般不应该对panic异常做任何处理
+如果想从异常中恢复，或者说在程序奔溃前做一些操作，可以考虑使用recover()
+
+- 比如： 当web服务器遇到不可预料的严重问题时，在崩溃前应该将所有的连接关闭；
+
+
+如果在deferred函数中调用了内置函数recover，并且定义该defer语句的函数发生了panic异常，recover会使程序从panic中恢复，并返回panic value。
+- 这个panic value就是recover函数返回值，由上游 调用 panic(value)传入
+
+* 导致panic异常的函数不会继续运行，但能正常返回。
+- 在未发生panic时调用recover，recover会返回nil。
+
+- 不应该试图去恢复其他包或者由他人开发的函数引起的panic。
+- 公有的API应该将函数的运行失败作为error返回，而不是panic。
+- 只恢复应该被恢复的panic异常：
+  - web服务器遇到处理函数导致的panic时会调用recover，输出堆栈信息，继续运行。
+  - 为了标识某个panic是否应该被恢复，我们可以将panic value设置成特殊类型。
+    - 在recover时对panic value进行检查，如果发现panic value是特殊类型，就将这个panic作为error处理。
+```go
+func soleTitle(doc *html.Node) (title string, err error) {
+    type bailout struct{}
+    defer func() {
+        switch p := recover(); p {
+        case nil:       // no panic
+        case bailout{}: // "expected" panic
+            err = fmt.Errorf("multiple title elements")
+        default:
+            panic(p) // unexpected panic; carry on panicking
+        }
+    }()
+    // Bail out of recursion if we find more than one nonempty title.
+    forEachNode(doc, func(n *html.Node) {
+        if n.Type == html.ElementNode && n.Data == "title" &&
+            n.FirstChild != nil {
+            if title != "" {
+                panic(bailout{}) // multiple titleelements
+            }
+            title = n.FirstChild.Data
+        }
+    }, nil)
+    if title == "" {
+        return "", fmt.Errorf("no title element")
+    }
+    return title, nil
+}
+```
+
 
 ## 第六章 方法
 
@@ -1633,6 +2068,9 @@ fmt.Printf("%#v\n", w)  //Wheel{Circle:Circle{Point:Point{X:8, Y:8}, Radius:5}, 
 
 
 ## 第七章 接口
+
+
+### 接口类型转换
 
 
 

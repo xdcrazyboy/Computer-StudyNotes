@@ -1,5 +1,19 @@
 
-# 基础类型
+# 基础
+
+## 基础类型
+
+### 切片
+
+
+#### range遍历
+- 只有一个值时，**默认取的是index而不是value**。 建议使用` _, v := range arr`
+```go
+for i := range arrs {
+    fmt.Printf("i:%d\n", i)
+    v += i
+}
+```
 
 ## 声明和定义
 
@@ -14,6 +28,34 @@
   * 为引用类型分配内存并初始化，返回的是类型本身，因为其就是引用类型
   * make(T)返回一个类型为T的初始值
   * 只适用于3种内建的引用类型:切片、map 、 channel
+
+
+
+## 打印语句Printf的格式转换
+- 不同类型打印值
+  - `%s` 字符串
+  - `%d`  十进制整数
+  - `%x, %o, %b`  十六进制，八进制，二进制整数。
+  - `%f, %g, %e`  浮点数： 3.141593 3.141592653589793 3.141593e+00
+  * `%t`          布尔：true或false
+  * `%c`          字符（rune） (Unicode码点)
+  * `%s`          字符串
+* 常用特别
+  * `%v`          变量的自然形式（natural format）
+  * `%T`          变量的类型
+  * `#`
+  * 带`+`         输出字段名
+* 其他不常用
+  * `%q`          带双引号的字符串"abc"或带单引号的字符'c'
+  * `%%`          字面上的百分号标志（无操作数）
+  * `%*s`         其中的*会在字符串之前填充**一些空格**。`fmt.Printf("%*s</%s>\n", depth*2, "", n.Data)`
+
+
+**其他说明**
+- 后缀f指format，ln指line。 
+  - 以字母`f`结尾的格式化函数: 如`log.Printf`和`fmt.Errorf`，都采用fmt.Printf的格式化准则。
+  - 以`ln`结尾的格式化函数: 则遵循Println的方式，以跟`%v`差不多的方式格式化参数，并在最后添加一个换行符
+
 
 
 # 函数、方法
@@ -38,6 +80,26 @@ error类型是一个接口类型，它的定义为: `type error interface { Erro
 
 # 接口、结构体
 
+## 接口
+
+
+### 接口类型转换
+go 的在 interface 类型转换的时候， 不是使用类型的转换， 而是使用
+```
+t,ok := i.(T)
+//具体例子
+func getName(params ...interface{}) string {
+    var stringSlice []string
+    for _, param := range params {
+        stringSlice = append(stringSlice, param.(string))
+    }   
+    return strings.Join(stringSlice, "_")
+}
+  
+func main() {
+    fmt.Println(getName("redis", "slave", "master"))
+}
+```
 
 
 
