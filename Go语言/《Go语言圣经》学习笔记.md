@@ -2261,27 +2261,575 @@ func soleTitle(doc *html.Node) (title string, err error) {
 }
 ```
 
+---
 
-## 第六章 方法
+## 第六章 方法（method）
+一个方法则是一个一个和特殊类型关联的函数。
 
 
+### 方法声明
+**在函数声明时**，在其名字之前放上一个变量，**即是一个方法**。
+
+这个附加的参数会将该函数附加到这种类型上，即相当于为这种类型定义了一个独占的方法。
+
+```go
+package geometry
+
+import "math"
+
+type Point struct{ X, Y float64 }
+
+// traditional function
+func Distance(p, q Point) float64 {
+    return math.Hypot(q.X-p.X, q.Y-p.Y)
+}
+
+// same thing, but as a method of the Point type
+func (p Point) Distance(q Point) float64 {
+    return math.Hypot(q.X-p.X, q.Y-p.Y)
+}
+```
+- 上面的代码里那个`(p Point)`附加的参数p，叫做**方法的接收器**（receiver）.命名使用类型的第一个字母，简约。
+- p.Distance的表达式叫做**选择器**，因为他会选择合适的对应p这个对象的Distance方法来执行。
+- 选择器也会被用来选择一个struct类型的字段，比如p.X。
+>由于方法和字段都是在同一命名空间，所以如果我们在这里声明一个X方法的话，编译器会报错，因为在调用p.X时会**有歧义.** **方法和字段不能同名？** 但是方法却可以同名？比如下面的：`func (path Path) Distance()`与上面的在一个包下，由于接收器不同，也可以同名而不报错。**两个Distance方法有不同的类型**。他们两个方法之间没有任何关系。
+```
+// A Path is a journey connecting the points with straight lines.
+type Path []Point
+// Distance returns the distance traveled along the path.
+func (path Path) Distance() float64 {
+    sum := 0.0
+    for i := range path {
+        if i > 0 {
+            sum += path[i-1].Distance(path[i])
+        }
+    }
+    return sum
+}
+```
+>但是**函数的签名其实就是函数的参数列表和结果列表的统称**，它定义了可用来鉴别不同函数的那些特征，同时也定义了我们与函数交互的方式。
+上面同名方法算函数嘛？ 如果算，那签名是一致的，名字也一样，只有接收器不一样，不会报错？  
+- **进入了误区**： 函数同名不能出现一个包下，哪怕签名不一样也不行。 跟参数名字冲突也不行？ 但是接收器不同那就是可以？
+
+>因为**每种类型都有其方法的命名空间**，我们在用Distance这个名字的时候，不同的Distance调用指向了不同类型里的Distance方法。
+
+
+也就是说，一个包内有一个方法的命名空间，而每种类型有自己的方法命名空间。 
+- 在每个命名空间内部 方法、函数、字段都不能重名，调用会有歧义。
+- 在不同命名空间可以出现重名（哪怕都在一个文件里，也可以）
+
+
+Path是一个命名的slice类型，而不是Point那样的struct类型，然而我们依然可以为它定义方法。**这也是Go与其他语言不同**
+- 可以给同一个包内的任意命名类型定义方法，只要这个命名类型的底层类型不是指针或者interface。
+
+
+### 基于指针对象的方法
+- 一般会约定如果Point这个类有一个指针作为接收器的方法，那么所有Point的方法都必须有一个指针接收器，即使是那些并不需要这个指针接收器的函数。
+- 在声明方法时，如果一个类型名本身是一个指针的话，是不允许其出现在接收器中的。
+
+
+
+如果接收器p是一个Point类型的变量，并且其方法需要一个Point指针作为接收器，可以用下面这种简短的写法：
+```go
+p.ScaleBy(2)
+```
+编译器会隐式地帮我们用&p去调用ScaleBy这个方法。这种简写方法只适用于“变量”。临时变量的地址获取不到，所以不行：`Point{1, 2}.ScaleBy(2)`
+
+
+在每一个合法的方法调用表达式中，也就是下面三种情况里的任意一种情况都是可以的：
+
+1. 要么接收器的实际参数和其形式参数是相同的类型，比如两者都是类型T或者都是类型*T：
+```go
+Point{1, 2}.Distance(q) //  Point
+pptr.ScaleBy(2)         // *Point
+```
+2. 或者接收器实参是类型T，但接收器形参是类型*T，这种情况下编译器会隐式地为我们取变量的地址：
+```go
+p.ScaleBy(2) // implicit (&p)
+```
+3. 或者接收器实参是类型*T，形参是类型T。编译器会隐式地为我们解引用，取到指针指向的实际变量：
+```go
+pptr.Distance(q) // implicit (*pptr)
+```
+
+
+- 不管你的method的receiver是指针类型还是非指针类型，都是可以通过指针/非指针类型进行调用的，编译器会帮你做类型转换。
+- 在声明一个method的receiver该是指针还是非指针类型时，你需要考虑两方面的因素，第一方面是这个对象本身是不是特别大，如果声明为非指针变量时，调用会产生一次拷贝；第二方面是如果你用指针类型作为receiver，那么你一定要注意，这种指针类型指向的始终是一块内存地址，就算你对其进行了拷贝。
+
+
+**Nil也是一个合法的接收器类型**
+- 一个map取值的知识点
+  - 直接写nil.Get("item")的话是无法通过编译的，因为nil的字面量编译器无法判断其准确类型。
+  - 尝试更新一个空map会报panic
+```go
+m = nil
+fmt.Println(m.Get("item")) // ""
+m.Add("item", "3")         // panic: assignment to entry in nil map
+```
+
+
+### 通过嵌入结构体来扩展类型
+- 被嵌入类型可以直接访问（匿名）嵌入的类型的字段和方法，不需要调用嵌入类型。  `cp.Point.X` 可以简写成 `cp.Y`
+- 类型中内嵌的匿名字段也可能是一个命名类型的指针，这种情况下字段和方法会被间接地引入到当前的类型中（访问时也需要先调用该对象再访问其字段）
+- 当编译器解析一个选择器到方法时，比如p.ScaleBy，它会首先去找直接定义在这个类型里的ScaleBy方法，然后找被ColoredPoint的内嵌字段们引入的方法，然后去找Point和RGBA的内嵌字段引入的方法，然后一直递归向下找。
+  - 在同一级出现一样的就会报错，有歧义，编译器不知道选择哪个。
+
+
+### 方法值和方法表达式
+没太看懂啥用
+
+
+### Bit数组
+- Go语言里的集合一般会用map[T]bool这种形式来表示，T代表元素类型。
+- 表示非负整数时，使用bit数组，当集合的第i位被设置时，我们才说这个集合包含元素i。
+
+
+**fmt会直接调用用户定义的String方法**
+- 当时有个需要注意的地方：
+  - 直接fmt.Println(x)，会调用x类型的String(),如果只定义了x指针接收器的String()方法，那这里就会以原始的方式打印。 所以在这种情况下&符号是不能忘的（fmt.Println(&x)）。在我们这种场景下，你把String方法绑定到IntSet对象上，而不是IntSet指针上可能会更合适一些。
+  - 当然，如果这样写 `fmt.Println(x.String())`，编译器会隐式地在x前插入&操作符，也能正确调用到x的指针方法。
+
+
+### 封装
+**优点**
+- 首先，因为调用方不能直接修改对象的变量值，其只需要关注少量的语句并且只要弄懂少量变量的可能的值即可。
+- 第二，隐藏实现的细节，可以防止调用方依赖那些可能变化的具体实现，这样针对实现可以做很多优化，只要不破坏对外暴露的api。
+- 第三，也是最重要的，阻止了外部调用方对对象内部的值任意地进行修改。
+
+
+在命名一个**getter方法**时，我们通常会**省略掉前面的Get前缀**。
+- 这种简洁上的偏好也可以推广到各种类型的前缀比如Fetch，Find或者Lookup。
 
 
 ## 第七章 接口
+>接口类型是对其它类型行为的抽象和概括；
+- Go语言的接口类型——满足隐式实现的。也就是说，我们没有必要对于给定的具体类型定义所有满足的接口类型。
+  - 好处一：可以让你创建一个新的接口类型满足已经存在的具体类型却不会去改变这些类型的定义；
+  - 好处二：当我们使用的类型来自于不受我们控制的包时这种设计尤其有用。
 
 
-### 接口类型转换
+### 接口约定
+- 它不会暴露出它所代表的对象的内部值的结构和这个对象支持的基础操作的集合；它们只会表现出它们自己的方法。
+- 当我们看到一个接口类型的值时，不知道它是什么，只知道通过它的方法来做什么。
+
+
+**举个例子：**
+- fmt.Printf，它会把结果写到标准输出
+- fmt.Sprintf，它会把结果以字符串的形式返回
+- 它们都使用了另一个函数fmt.Fprintf来进行封装。
+```go
+package fmt
+
+func Fprintf(w io.Writer, format string, args ...interface{}) (int, error)
+func Printf(format string, args ...interface{}) (int, error) {
+    return Fprintf(os.Stdout, format, args...)
+}
+func Sprintf(format string, args ...interface{}) string {
+    var buf bytes.Buffer
+    Fprintf(&buf, format, args...)
+    return buf.String()
+}
+```
+- **注意**： Fprintf的前缀F表示文件（File）也表明格式化输出结果应该被写入第一个参数提供的文件中。
+  - 在Printf函数中的第一个参数os.Stdout是*os.File类型；
+  - 在Sprintf函数中的第一个参数&buf是一个指向可以写入字节的内存缓冲区，然而它并不是一个文件类型尽管它在某种意义上和文件类型相似。
+  - **其实**，只要第一个参数实现了io.Writer接口类型的方法就行。io.Writer类型定义了函数Fprintf和这个函数调用者之间的**约定**。
+```go
+// Writer is the interface that wraps the basic Write method.
+type Writer interface {
+    // Write writes len(p) bytes from p to the underlying data stream.
+    // It returns the number of bytes written from p (0 <= n <= len(p))
+    // and any error encountered that caused the write to stop early.
+    // Write must return a non-nil error if it returns n < len(p).
+    // Write must not modify the slice data, even temporarily.
+    //
+    // Implementations must not retain p.
+    Write(p []byte) (n int, err error)
+}
+```
+
+
+### 接口类型
+>一个实现了这些方法的**具体类型**是这个接口类型的**实例**。
+
+io.Writer类型是用得最广泛的接口之一，因为它提供了所有类型的写入bytes的抽象，包括文件类型，内存缓冲区，网络链接，HTTP客户端，压缩工具，哈希等等。
+**Go语言有单方法接口的命名习惯**，比如Reader，Closer。
+
+
+可以内嵌组合这些接口，当然，方式有多种，下面三种都是等价的。
+```go
+//组合内嵌
+type ReadWriter interface {
+    Reader
+    Writer
+}
+//不用内嵌
+type ReadWriter interface {
+    Read(p []byte) (n int, err error)
+    Write(p []byte) (n int, err error)
+}
+//混搭
+type ReadWriter interface {
+    Read(p []byte) (n int, err error)
+    Writer
+}
+```
+
+
+### 实现接口的条件
+Go的程序员经常会简要的把一个具体的类型描述成一个特定的接口类型。举个例子，`*bytes.Buffer`是`io.Writer`；`*os.Files`是`io.ReadWriter`。
+
+
+如果类型实现了接口x，那就能直接赋值给接口x。
+```go
+var w io.Writer
+w = os.Stdout           // OK: *os.File has Write method
+w = new(bytes.Buffer)   // OK: *bytes.Buffer has Write method
+w = time.Second         // compile error: time.Duration lacks Write method
+```
+
+
+先解释一个类型持有一个方法的表示当中的细节
+- 对于每一个命名过的具体类型T；它的一些方法的接收者是类型T本身然而另一些则是一个*T的指针。
+- 在T类型的参数上调用一个*T的方法是合法的，只要这个参数是一个变量；（编译器隐式的获取了它的地址）
+  - 但请注意：这说明T类型的值没有拥有全部*T指针的方法，它就可能只实现了部分的接口。 
+  - 举个例子：IntSet类型的String方法的接收者是一个指针类型，所以我们不能在一个不能寻址的IntSet值上调用这个方法。
+    ```go
+    type IntSet struct { /* ... */ }
+    func (*IntSet) String() string
+    var _ = IntSet{}.String() // compile error: String requires *IntSet receiver
+
+    ```
+  - 但是可以在一个IntSet变量上调用这个方法
+    ```go
+    var s IntSet
+    var _ = s.String() // OK: s is a variable and &s has a String method 
+    ```
+- 也就是说只有 *IntSet类型实现了fmt.Stringer接口
+```go
+var _ fmt.Stringer = &s // OK
+var _ fmt.Stringer = s  // compile error: IntSet lacks String method
+```
+
+
+**空接口： interface{}**
+- 空接口类型对实现它的类型没有要求，所以我们可以将任意一个值赋给空接口类型。
+  - 当然不能直接对它持有的值做操作，因为interface{}没有任何方法。
+  - 可以用类型断言来获取interface{}中值的方法。
+
+
+如果我们发现我们需要以同样的方式处理Audio和Video，我们可以定义一个Streamer接口来代表它们之间相同的部分而不必对已经存在的类型做改变。 
+```go
+type Audio interface {
+    Stream() (io.ReadCloser, error)
+    RunningTime() time.Duration
+    Format() string // e.g., "MP3", "WAV"
+}
+type Video interface {
+    Stream() (io.ReadCloser, error)
+    RunningTime() time.Duration
+    Format() string // e.g., "MP4", "WMV"
+    Resolution() (x, y int)
+}
+type Streamer interface {
+    Stream() (io.ReadCloser, error)
+    RunningTime() time.Duration
+    Format() string
+}
+```
+
+
+### 7.4 flag.Value接口
+一个标准的接口类型flag.Value是怎么帮助命令行标记定义新的符号的？
+
+
+### 接口值
+在一个接口值中，类型部分代表与之相关类型的描述符。 类型描述符--比如类型的名称和方法
+
+一个接口的零值就是它的类型type和值value的部分都是nil。
+
+
+**比较**
+- 接口值可以使用==和!＝来进行比较。
+- 两个接口值**相等**仅当它们都是nil值，或者它们的**动态类型相同**并且**动态值**也相等(根据这个动态值类型对应的==操作相等，要求必须是可比较的）。
+- 接口值是可比较的，所以它们可以用在map的键或者作为switch语句的操作数。
+- 如果两个接口值的动态类型相同，但是这个动态类型是不可比较的（比如切片），将它们进行比较就会失败并且panic:
+- 接口介于安全的可比较类型和完全不可比较类型之间
+  - 在比较接口值或者包含了接口值的聚合类型时，我们必须要意识到潜在的panic
+  - 在使用接口作为map的键或者switch的操作数也要注意
+  - 只能比较你非常确定它们的动态值是可比较类型的接口值。
+  - **可以使用使用fmt包的%T动作获取接口值的动态类型。**（内部使用反射来获取接口动态类型的名称）
+
+
+**注意：一个包含nil指针的接口不是nil接口**
+- 主要区别就是接口的type是否也为nil？
+```go
+const debug = true
+
+func main() {
+    var buf *bytes.Buffer
+    if debug {
+        buf = new(bytes.Buffer) // enable collection of output
+    }
+    f(buf) // NOTE: subtly incorrect!
+    if debug {
+        // ...use buf...
+    }
+}
+
+// If out is non-nil, output will be written to it.
+func f(out io.Writer) {
+    // ...do something...
+    if out != nil {  //它的动态类型是*bytes.Buffer，是一个包含空指针值的非空接口
+        out.Write([]byte("done!\n"))  // panic: nil pointer dereference， 因为 out的动态值为空。
+    }
+}
+```
+- 解决方案：就是将main函数中的变量buf的类型改为io.Writer，因此可以避免一开始就将一个不完整的值赋值给这个接口。
+
+**为啥？？？**
+
+
+### sort.Interface接口
+Go语言的sort.Sort函数**不会对具体的序列和它的元素做任何假设**。
+- 使用了一个接口类型sort.Interface来指定通用的排序算法和可能被排序到的序列类型之间的约定。
+  - 一个内置的排序算法需要知道三个东西：序列的长度，表示两个元素比较的结果，一种交换两个元素的方式；
+```go
+package sort
+
+type Interface interface {
+    Len() int
+    Less(i, j int) bool // i, j are indices of sequence elements
+    Swap(i, j int)
+}
+```
+
+
+### http.Handler接口
+
+- net/http包提供了一个请求多路器ServeMux来简化URL和handlers的联系。一个ServeMux将一批http.Handler聚集到一个单一的http.Handler中。
+```go
+func main() {
+    db := database{"shoes": 50, "socks": 5}
+    mux := http.NewServeMux()
+    mux.Handle("/list", http.HandlerFunc(db.list))
+    mux.Handle("/price", http.HandlerFunc(db.price))
+    log.Fatal(http.ListenAndServe("localhost:8000", mux))
+}
+type database map[string]dollars
+
+func (db database) list(w http.ResponseWriter, req *http.Request) {
+    for item, price := range db {
+        fmt.Fprintf(w, "%s: %s\n", item, price)
+    }
+}
+//省略price方法
+
+```
+  - db.list是一个实现了handler类似行为的函数, 它不满足http.Handler接口并且不能直接传给mux.Handle。
+  - 语句http.HandlerFunc(db.list)是一个转换而非一个函数调用，因为http.HandlerFunc是一个类型。
+
+
+```go
+package http
+
+type HandlerFunc func(w ResponseWriter, r *Request)
+
+func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
+    f(w, r)
+}
+```
+- HandlerFunc显示了在Go语言接口机制中一些不同寻常的特点:
+  - 它是一个实现了接口http.Handler的方法的函数类型。
+  - ServeHTTP方法的行为是调用了它的函数本身。因此**HandlerFunc是一个让函数值满足一个接口的适配器**，这里函数和这个接口**仅有的方法有**相同的函数签名。
+
+- 为了方便，net/http包提供了一个全局的ServeMux实例DefaultServerMux和包级别的http.Handle和http.HandleFunc函数。
+- 现在，为了**使用DefaultServeMux作为服务器的主handler**，我们不需要将它传给ListenAndServe函数；nil值就可以工作。
+  - 下面代码就把`mux := http.NewServeMux()`这一步省了，除非需要多个服务器监听不同的端口，然后再构建不同的ServeMux去调用ListenAndServe。 但大部分情况只需要一个web服务器。
+```go
+func main() {
+    db := database{"shoes": 50, "socks": 5}
+    http.HandleFunc("/list", db.list)
+    http.HandleFunc("/price", db.price)
+    log.Fatal(http.ListenAndServe("localhost:8000", nil))
+}
+```
+
+
+>go语言目前还没有一个全为的web框架，Go语言标准库中的构建模块就已经非常灵活以至于这些框架都是不必要的。此外，尽管在一个项目早期使用框架是非常方便的，但是它们带来额外的复杂度会使长期的维护更加困难。
+
+
+### error接口
+```go
+type error interface {
+    Error() string
+}
+```
+创建一个error最简单的方法就是调用errors.New函数，它会根据传入的错误信息返回一个新的error。整个errors包仅只有4行：
+
+```go
+package errors
+//每个New函数的调用都分配了一个独特的和其他错误不相同的实例。哪怕是一样的错误信息。
+func New(text string) error { return &errorString{text} }
+
+//使用结构而不是直接暴露字符串，为了保护它表示的错误避免粗心（或有意）的更新
+type errorString struct { text string }
+
+func (e *errorString) Error() string { return e.text }
+```
+
+- 用得更多的是fmt.Errorf，它还会处理字符串格式化。
+```
+func Errorf(format string, args ...interface{}) error {
+    return errors.New(Sprintf(format, args...))
+}
+```
+
+
+### 类型断言 x.(T)
+类型断言是一个使用在接口值上的操作，形如**x.(T)**。
+- x表示一个接口的类型和T表示一个类型。
+- 检查它操作对象x的动态类型是否和断言的类型T匹配。
+  - 如果断言的类型T是一个**具体类型**，然后类型断言检查x的动态类型是否和T相同。
+    - 检查成功，断言的结果是 x的动态值，类型是T。 也就是说具体类型的类型断言从它的操作对象中获得具体的值。
+    - 检查失败，抛出panic
+  - 如果断言的类型T是一个**接口类型**，？？？（莫名其妙的翻译）
+    - 如果检查成功了，断言结果为类型T，不过保留了接口值内部的动态类型和值的部分？
+    - 如果失败了？
+- 如果断言操作的对象是一个nil接口值，那么不论被断言的类型是什么这个类型断言都会失败。
+```go
+//第一个类型断言后，w和rw都持有os.Stdout,它们都有一个动态类型*os.File
+var w io.Writer
+//w只公开了Write方法
+w = os.Stdout
+//rw变量还公开了它的Read方法
+rw := w.(io.ReadWriter) // success: *os.File has both Read and Write
+w = new(ByteCounter)
+rw = w.(io.ReadWriter) // panic: *ByteCounter has no Read method
+```
+- 几乎不需要对一个更少限制性的接口类型（更少的方法集合）做断言。
+- 判断接口值的是否是某动态类型，然后根据结果去做一些操作，一般会使用返回两个结果断言： 
+  - 第一个结果是表示断言得到的类型。如果失败了，就会等于被断言类型的零值
+  - 第二个结果是ok bool，表示判断是否成功。
+
+
+**通过类型断言识别错误类型**
+
+
+举例：os包中文件操作返回的错误原因，有三种经常的错误必须进行不同的处理：文件已经存在（对于创建操作），找不到文件（对于读取操作），和权限拒绝。
+- 如何对错误值表示的失败进行分类？
+  - 直接判断是否包含特定子字符串是不健壮的。
+  - 更可靠的是使用一个专门的类型来描述结构化的错误。 比如os包中的PathError、LinkError。
+    - 调用方需要使用类型断言来检测错误的具体类型以便将一种失败和另一种区分开；具体的类型可以比字符串提供更多的细节。
+```go
+_, err := os.Open("/no/such/file")
+fmt.Println(err) // "open /no/such/file: No such file or directory"
+fmt.Printf("%#v\n", err)
+// Output: &os.PathError{Op:"open", Path:"/no/such/file", Err:0x2}
+
+//有几个特定的方法可以对错误类型进行判断
+func IsExist(err error) bool
+func IsNotExist(err error) bool
+func IsPermission(err error) bool
+
+//使用
+os.IsNotExist(err)
+```
+- 区别错误通常必须在失败操作后，错误传回调用者前进行。
+
+
+**通过类型断言查询接口**
+
+
+- 有一个允许字符串高效写入的WriteString方法；这个方法会避免去分配一个临时的拷贝。
+- 但是我们不确定某个io.Writer类型的变量是否拥有这个方法，可以定义一个只有这个方法的新接口，然后使用类型断言检测w的动态类型是否满足这个新接口。
+```go
+func writeString(w io.Writer, s string) (n int, err error) {
+    type stringWriter interface {
+        WriteString(string) (n int, err error)
+    }
+    if sw, ok := w.(stringWriter); ok {
+        return sw.WriteString(s) // avoid a copy
+    }
+    return w.Write([]byte(s)) // allocate temporary copy
+}
+
+func writeHeader(w io.Writer, contentType string) error {
+    if _, err := writeString(w, "Content-Type: "); err != nil {
+        return err
+    }
+    if _, err := writeString(w, contentType); err != nil {
+        return err
+    }
+    // ...
+}
+```
+- 这个例子的神奇之处在于，没有定义了WriteString方法的标准接口，也没有指定它是一个所需行为的标准接口。
+- 一个具体类型只会通过它的方法决定它是否满足stringWriter接口，而不是任何它和这个接口类型所表达的关系。
+
+
+定义一个特定类型的方法隐式地获取了对特定行为的协约。对于Go语言的新手，特别是那些来自有强类型语言使用背景的新手，可能会发现它缺乏显式的意图令人感到混乱，但是在实战的过程中这几乎不是一个问题。除了空接口interface{}，接口类型很少意外巧合地被实现。
+
+
+### 类型分支
+接口有两种使用方式：
+- 第一种，以io.Reader，io.Writer，fmt.Stringer，sort.Interface，http.Handler和error为典型，一个接口的方法表达了实现这个接口的具体类型间的相似性，但是隐藏了代码的细节和这些具体类型本身的操作。**重点在于方法上，而不是具体的类型上。**
+- 第二种，利用一个接口值可以持有各种具体类型值的能力，将这个接口当成这些类型的联合。使用类型断言用来动态地区别这些类型。 重点在于具体的类型满足这个接口，而不在于接口的方法，且没有隐藏任何信息。我们将以这种方式使用的接口描述为discriminated unions（可辨识联合）。
+
+
+- 一个类型分支像普通的switch语句一样，它的运算对象是`x.(type)`——它使用了关键词字面量type——并且每个case有一到多个类型。
+- 对于bool和string情况的逻辑需要通过类型断言访问提取的值，所以对于这个断言的值需要用一个临时变量存起来，方便使用。
+- 在每个单一类型的case内部，变量x和这个case的类型相同。
+```go
+func sqlQuote(x interface{}) string {
+    switch x := x.(type) {
+    case nil:
+        return "NULL"
+    case int, uint:
+        return fmt.Sprintf("%d", x) // x has type interface{} here.
+    case bool:
+        if x {
+            return "TRUE"
+        }
+        return "FALSE"
+    case string:
+        return sqlQuoteString(x) // (not shown)
+    default:
+        panic(fmt.Sprintf("unexpected type %T: %v", x, x))
+    }
+}
+```
+
+
+### 示例：基于标记的XML解码
+* encoding/xml包也提供了一个更低层的基于标记的API用于XML解码。
+* 在基于标记的样式中，解析器消费输入并产生一个标记流；
+* 四个主要的标记类型
+  * StartElement，EndElement，CharData，和Comment
+  * 每一个都是encoding/xml包中的具体类型。
+
+
+### 接口补充说明
+- 接口只有当有两个或两个以上的具体类型必须以相同的方式进行处理时才需要。遵循这条规则必定会从任意特定的实现细节中抽象出来。结果就是有更少和更简单方法的更小的接口，而小的接口更容易满足。
+- 对于接口设计的一个好的标准就是 ask only for what you need（只考虑你需要的东西）
 
 
 
+---
 
 ## 第八章 并发编程（一）基于顺序通信进程（CSP）
-使用goroutines和channels处理并发编程
+>本章讲解goroutine和channel，其支持“顺序通信进程”（communicating sequential processes）或被简称为CSP。CSP是一种现代的并发编程模型，在这种编程模型中值会在不同的运行实例（goroutine）中传递，尽管大多数情况下仍然是被限制在单一实例中。
+
+- 在语法上，go语句是一个普通的函数或方法调用前加上关键字go。 `go f()`
+- go语句会使其语句中的函数在一个新创建的goroutine中运行。而go语句本身会迅速地完成。
+- 主函数返回时，所有的goroutine都会被直接打断，程序退出。
+- 除了从主函数退出或者直接终止程序之外，没有其它的编程方法能够让一个goroutine来打断另一个的执行. 可以使用通信去让其主动退出。
+
 
 
 
 ## 第九章 并发编程（二）传统的基于共享变量
-
+>在多goroutine之间的共享变量，并发问题的分析手段，以及解决这些问题的基本模式。
 
 
 ## 第十章 包机制和包的组织结构
@@ -2299,6 +2847,11 @@ Go语言的**闪电**般的**编译速度主要得益于**三个语言特性。
 >在编译一个包的时候，编译器只需要读取每个直接导入包的目标文件，而不需要遍历所有依赖的的文件（译注：很多都是重复的间接依赖）。
 
 
+**导入路径**：为了避免冲突，所有非标准库包的导入路径建议以所在组织的互联网域名为前缀；而且这样也有利于包的检索。
+
+
+**包声明**：默认的包名就是包导入路径名的最后一段，因此即使两个包的导入路径不同，它们依然可能有一个相同的包名。
+这就需要用到别名——
 
 ## 第十一章 单元测试
 Go语言的工具和标准库中集成了轻量级的测试功能，避免了强大但复杂的测试框架。测试库提供了一些基本构件，必要时可以用来构建复杂的测试构件。

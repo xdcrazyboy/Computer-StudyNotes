@@ -1,5 +1,5 @@
 
-## 看圣经遇到的一个奇怪问题
+## 看圣经遇到的一个奇怪问题： defer修饰的方法到底什么时候执行？
 
 
 
@@ -119,3 +119,17 @@ The bigSlowOperation function below calls trace immediately, which does the "on 
 By deferring a call to the returned function in this way, we can instrument the entry point and all exit points of a function in a single statement and even pass values, like the start time, between the two actions. 
 
 But don't forget the final parentheses in the defer statement, or the "on entry" action will happen on exit and the on-exit action won't happen at all!
+
+
+
+## 圣经翻译疑惑：给命名类型指定方法有啥限制？
+`Distance() float64`
+
+
+
+
+# 疑惑
+
+## 如何知道类型实现了哪些接口？
+
+有个疑问，go里面一个类型实现了接口所有的方法，才算该接口类型，但并没有语法显式 说明这个类型实现了哪个接口(例如java中有implements), 这样看别人代码的时候，碰到一 个类型，无法知道这个类型是不是实现了一个接口，除非类型和接口写在一个文件，然后 还要自己一个一个方法去对比。有比较快的方法可以知道当前类型实现了哪些接口么?
