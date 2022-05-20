@@ -2851,7 +2851,161 @@ Go语言的**闪电**般的**编译速度主要得益于**三个语言特性。
 
 
 **包声明**：默认的包名就是包导入路径名的最后一段，因此即使两个包的导入路径不同，它们依然可能有一个相同的包名。
-这就需要用到别名——
+
+
+关于默认包名一般采用导入路径名的最后一段的约定也有三种例外情况：
+- main包：名字为main的包是给go build，构建命令一个信息，这个包编译完之后必须调用连接器生成一个可执行程序。
+- _test.go结尾的文件：并且这些源文件声明的包名也是以_test为后缀名的。这种目录可以包含两种包：
+  - 一种是普通包，
+  - 另一种则是测试的外部扩展包。
+  - 所有以_test为后缀包名的测试外部扩展包都由go test命令独立编译，普通包和测试的外部扩展包是相互独立的。
+- 带版本号：例如“gopkg.in/yaml.v2”。这种情况下包的名字并不包含版本号后缀，而是yaml。
+
+
+**导入声明**：
+- 如果我们想同时导入两个有着名字相同的包，例如math/rand包和crypto/rand包，那么导入声明必须至少为一个同名包指定一个新的包名以避免冲突。这叫做**导入包的重命名**。
+```go
+import(
+    "crypto/rand"
+    mrand "math/rand" // alternative name mrand avoids conflict
+)
+```
+- 如果文件中已经有了一个名为path的变量，那么我们可以将“path”标准包重命名为pathpkg。
+- 每个导入声明语句都明确指定了当前包和被导入包之间的依赖关系。**如果遇到包循环导入的情况，Go语言的构建工具将报告错误。**
+
+
+**包的匿名导入**
+- 导入了又不用会编译报错。
+  - 导入的意义是啥？ 导入包后会做一些预处理，我只需要这些处理后的效果：它会计算包级变量的初始化表达式和执行导入包的init初始化函数。
+    - 例如图像处理image包有这种场景：主程序只需要匿名导入特定图像驱动包就可以用image.Decode解码对应格式的图像了。
+    - 例如数据库，匿名导入相应的数据库驱动包，直接就可以用。
+```go
+import (
+    "database/sql"
+    _ "github.com/lib/pq"              // enable support for Postgres
+    _ "github.com/go-sql-driver/mysql" // enable support for MySQL
+)
+
+db, err = sql.Open("postgres", dbname) // OK
+db, err = sql.Open("mysql", dbname)    // OK
+db, err = sql.Open("sqlite3", dbname)  // returns error: unknown driver "sqlite3"
+```
+  - 怎么规避报错？ 匿名导入，就是重命名为下划线 _ 。
+
+
+**包的命名原则**
+
+- 一般使用短小的，但也要易于理解无歧义。 ioutils够简洁了，就不需要命名为util。
+- 避免包名使用常用作局部变量的名字。例如path
+- 一般采用单数
+- 设计变量名时，考虑与包名的混用。 所以不需要在变量名里包含包名的重复意思。 比如包名bos，变量名就不需要bosName
+- 只暴露一个主要的数据结构和与它相关的方法，还有一个以New命名的函数用于创建实例。
+
+
+### 包的工具
+**GOPATH**
+
+
+当需要切换到不同工作区的时候，只要更新GOPATH就可以了。 `export GOPATH=$HOME/gobook`
+
+GOPATH对应的工作区目录有三个子目录。
+- src子目录用于存储源代码
+- pkg子目录用于保存编译后的包的目标文件
+- bin子目录用于保存编译后的可执行程序
+
+
+**GOROOT**
+
+
+GOROOT用来指定Go的安装目录，还有它自带的标准库包的位置。
+- 用户一般不需要设置GOROOT，默认情况下Go语言安装工具会将其设置为安装的目录路径。
+
+
+**其他环境变量**
+- GOOS环境变量用于指定目标操作系统（例如android、linux、darwin或windows）
+- GOARCH环境变量用于指定处理器的类型，例如amd64、386或arm等。
+
+
+**下载包**
+
+
+- go get命令获取的代码是真实的本地存储仓库，而不仅仅只是复制源文件，因此你依然可以使用版本管理工具比较本地代码的变更或者切换到其它的版本。
+  -  -u 表示下载最新版本。
+- 进入文件目录，然后获取版本号，这里地址其实是有个转换的， https://golang.org/x/net/html 包含了如下的元数据，它告诉Go语言的工具当前包真实的Git仓库托管地址.
+```
+$ cd $GOPATH/src/golang.org/x/net
+$ git remote -v
+origin  https://go.googlesource.com/net (fetch)
+origin  https://go.googlesource.com/net (push)
+
+$./fetch https://golang.org/x/net/html | grep go-import
+<meta name="go-import"
+      content="golang.org/x/net git https://go.googlesource.com/net">
+```
+
+
+**编译build**
+
+
+```
+$ cd anywhere
+$ go build gopl.io/ch1/helloworld
+```
+- go install命令和go build命令很相似，但是它会保存每个包的编译成果，而不是将它们都丢弃。
+- 被编译的包会被保存到\$GOPATH/pkg目录下，目录路径和 src目录路径对应，可执行程序被保存到$GOPATH/bin目录。
+- go install命令和go build命令都**不会重新编译没有发生变化的包**.
+- go build -i命令将安装每个目标所依赖的包。
+
+
+**分系统**
+- 如果一个文件名包含了一个操作系统或处理器类型名字，例如net_linux.go或asm_amd64.s，Go语言的构建工具将只在对应的平台编译这些文件。
+- 在包声明和包注释前面，可以增加参数告诉build只在特定系统编译或者不编译这个文件：
+```
+// +build linux darwin 只编译
+// +build ignore   不编译
+
+```
+
+
+**包文档**
+- 包中每个**导出**的成员和包声明前都应该包含目的和用法说明的注释。
+- 文档注释一般是完整的句子，第一行摘要说明，以被注释者的名字开头。 
+- 注释中的参数直接用定义的名字就行，不需要额外的引号或者标记注明。
+- 包注释
+  - 注释之后紧跟着包，这个注释就是包注释，只能有一个，多个文件同样包的注释会合并。
+  - 如果包注释过长，可以单独放在一个文件里，一般叫做doc.go。
+  - 文档要简洁不可忽视。 多看标准库。
+- `go doc`命令，该命令打印其后所指定的实体的声明与文档注释，该实体可能是一个包、某个具体的包成员、一个方法
+  - 不需要输入完整的包导入路径或正确的大小写
+```
+$ go doc time
+package time // import "time"
+。。。
+$ go doc time.Since
+$ go doc time.Duration.Seconds
+
+```
+- godoc的在线服务 https://godoc.org ，包含了成千上万的开源包的检索工具。
+- 也可以在自己的工作区目录运行godoc服务。运行下面的命令，然后在浏览器查看 http://localhost:8000/pkg 页面：`godoc -http :8000`
+  - 其中-analysis=type和-analysis=pointer命令行标志参数用于打开文档和代码中关于静态分析的结果。
+
+
+**内部包**
+  
+作用：希望在内部子包之间共享一些通用的处理包，或者我们只是想实验一个新包的还并不稳定的接口，暂时只暴露给一些受限制的用户使用。
+
+怎么用：Go语言的构建工具对**包含internal名字的路径段**的包导入路径做了特殊处理。这种包叫internal包，一个internal包只能被和internal目录有同一个父目录的包所导入。
+- 例如，net/http/internal/chunked内部包只能被net/http/httputil或net/http包导入，但是不能被net/url包导入
+
+
+**查询包**：go list命令可以查询可用包的信息。 `go list github.com/go-sql-driver/mysql`
+- 用"..."表示匹配任意的包的导入路径。导出工作区所有包。
+- 某个主题相关的所有包:`go list ...xml...`
+- -json命令行参数表示用JSON格式打印每个包的元信息: `go list -json hash`
+- 命令行参数-f则允许用户使用text/template包（§4.6）的模板语言定义输出文本的格式。 
+  - `go list -f '{{join .Deps " "}}' strconv`  用join模板函数将结果链接为一行
+  - 打印compress子目录下所有包的导入包列表: `go list -f '{{.ImportPath}} -> {{join .Imports " "}}' compress/...`
+
 
 ## 第十一章 单元测试
 Go语言的工具和标准库中集成了轻量级的测试功能，避免了强大但复杂的测试框架。测试库提供了一些基本构件，必要时可以用来构建复杂的测试构件。
