@@ -31,6 +31,38 @@ for i := range arrs {
 
 
 
+### 常见的坑
+- 不能用简短声明方式来单独为一个变量重复声明， := 左侧至少有一个新变量，才允许多变量的重复声明：
+
+
+**不小心覆盖了变量**
+- 对从动态语言转过来的开发者来说，简短声明很好用，这可能会让人误会 := 是一个赋值操作符。
+- 如果你在新的代码块中像下边这样误用了 :=，编译不会报错，但是变量不会按你的预期工作：
+  
+```go
+func main() {
+	x := 1
+	println(x)		// 1
+	{
+		println(x)	// 1
+		x := 2
+		println(x)	// 2	// 新的 x 变量的作用域只在代码块内部
+	}
+	println(x)		// 1
+}
+```
+
+- 复制代码这是 Go 开发者常犯的错，而且不易被发现。
+- 可使用 vet 工具来诊断这种变量覆盖，Go 默认不做覆盖检查，添加 -shadow 选项来启用：
+> go tool vet -shadow main.go
+>  main.go:9: declaration of "x" shadows declaration at main.go:5
+- 注意 vet 不会报告全部被覆盖的变量，可以使用 go-nyet 来做进一步的检测：
+> $GOPATH/bin/go-nyet main.go
+> main.go:10:3:Shadowing variable `x`
+
+
+
+
 ## 打印语句Printf的格式转换
 - 不同类型打印值
   - `%s` 字符串
@@ -55,6 +87,7 @@ for i := range arrs {
 - 后缀f指format，ln指line。 
   - 以字母`f`结尾的格式化函数: 如`log.Printf`和`fmt.Errorf`，都采用fmt.Printf的格式化准则。
   - 以`ln`结尾的格式化函数: 则遵循Println的方式，以跟`%v`差不多的方式格式化参数，并在最后添加一个换行符
+
 
 
 
