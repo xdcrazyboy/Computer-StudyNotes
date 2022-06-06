@@ -487,6 +487,9 @@ func showCounter(w http.ResponseWriter, r *http.Request) {
   - 指针是可见的内存地址
   - &操作符可以返回一个变量的内存地址
   - *操作符可以获取指针指向的变量内容
+    - 要注意区分表示指针类型的*，比如： 类型 *T 是指向 T 类型值的指针，其零值为 nil。
+
+
 - 不像C语言那样不受约束，也不想其他语言那样沦为单纯的“引用”，折中。
   - 没有指针运算，不能对指针进行加减。
 
@@ -2825,6 +2828,125 @@ func sqlQuote(x interface{}) string {
 - 主函数返回时，所有的goroutine都会被直接打断，程序退出。
 - 除了从主函数退出或者直接终止程序之外，没有其它的编程方法能够让一个goroutine来打断另一个的执行. 可以使用通信去让其主动退出。
 
+
+### 并发示例1和2
+
+**示例1：并发的Clock服务**
+
+- 第一个例子是一个顺序执行的时钟服务器，它会每隔一秒钟将当前时间写到客户端：
+- 但是那样客户端必须等待第一个客户端完成工作，这样服务端才能继续向后执行；因为我们这里的服务器程序同一时间只能处理一个客户端连接。
+- 我们这里对服务端程序做一点小改动，使其支持并发：在handleConn函数调用的地方增加go关键字，让每一次handleConn的调用都进入一个独立的goroutine。
+```go
+
+func handleConn(c net.Conn) {
+	defer c.Close()
+	for {
+		_, err := io.WriteString(c, time.Now().Format("15:04:05\n"))
+		if err != nil {
+			return // e.g., client disconnected
+		}
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func main() {
+	listener, err := net.Listen("tcp", "localhost:8000")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Print(err) // e.g., connection aborted
+			continue
+		}
+		go handleConn(conn) // handle connections concurrently
+	}
+}
+```
+
+
+**示例2：并发的Echo服务**
+```go
+//reverb1
+func echo(c net.Conn, shout string, delay time.Duration) {
+    fmt.Fprintln(c, "\t", strings.ToUpper(shout))
+    time.Sleep(delay)
+    fmt.Fprintln(c, "\t", shout)
+    time.Sleep(delay)
+    fmt.Fprintln(c, "\t", strings.ToLower(shout))
+}
+
+func handleConn(c net.Conn) {
+    input := bufio.NewScanner(c)
+    for input.Scan() {
+        echo(c, input.Text(), 1*time.Second)
+        //如果增加go,才能实现 上一次还没说完三次，下一次也会开始说。 不然就只能顺序说，只有上一句话说完，才能开始下一句。
+        go echo(c, input.Text(), 1*time.Second)
+    }
+    // NOTE: ignoring potential errors from input.Err()
+    c.Close()
+}
+
+//netcat2
+func main() {
+    conn, err := net.Dial("tcp", "localhost:8000")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer conn.Close()
+    go mustCopy(os.Stdout, conn)
+    mustCopy(conn, os.Stdin)
+}
+```
+
+### 8.4 Channels
+- 如果说goroutine是Go语言程序的并发体的话，那么channels则是它们之间的**通信机制**
+- 一个channel是一个通信机制，它可以让一个goroutine通过它给另一个goroutine发送值信息。
+
+
+**初始化**
+
+make函数初始化一个channel：
+```go
+ch := make(chan int) //可以发送int类型数据的channel
+```
+
+
+**比较**
+
+- 两个相同类型的channel可以使用==运算符比较。
+- 如果两个channel引用的是相同的对象，那么比较的结果为真。
+- 一个channel也可以和nil进行比较。
+
+
+**操作**
+
+- 一个channel有发送和接受两个主要操作，都是通信行为。
+- 发送： `ch <- x  // a send statement`
+- 接收:一个不使用接收结果的接收操作也是合法的。
+  - `x = <-ch`
+  - `<-ch`  
+- **关闭**:`close(ch)`。 关闭后
+  - 基于该channel的任何发送操作都将导致panic异常。
+  - 对一个已经被close过的channel进行接收操作依然可以接受到之前已经成功发送的数据；
+  - 如果channel中已经没有数据的话将产生一个零值的数据。
+
+
+**缓存通道**
+
+- 以最简单方式调用make函数创建的是一个无缓存的channel，但是我们也可以指定第二个整型参数，对应channel的容量。
+```go
+ch = make(chan int)    // unbuffered channel
+ch = make(chan int, 0) // unbuffered channel
+ch = make(chan int, 3) // buffered channel with capacity 3
+```
+
+
+**不带缓存的Channels**
+
+- 一个基于无缓存Channels的发送操作将导致发送者goroutine阻塞，直到另一个goroutine在相同的Channels上执行接收操作，当发送的值通过Channels成功传输之后，两个goroutine可以继续执行后面的语句。
+- 基于无缓存Channels的发送和接收操作将**导致两个goroutine做一次同步操作**。因为这个原因，无缓存Channels有时候也被称为**同步Channels**。
 
 
 
