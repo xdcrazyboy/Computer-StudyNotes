@@ -14,6 +14,124 @@
 - 授权功能的复杂性使得它可以囊括很多 Go 开发技能点。 本专栏学习就是将这两种功能实现升级为IAM系统，讲解它的构建过程。
 
 
+**创建数据库**
+
+```shell
+sudo tee /etc/yum.repos.d/mongodb-org-4.4.repo<<'EOF'
+[mongodb-org-4.4]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/$releasever/mongodb-org/4.4/x86_64
+gpgcheck=1
+enabled=1
+gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
+EOF
+```
+
+**创建CA证书**
+
+
+```shell
+tee ca-config.json << EOF
+{
+    "signing": {
+        "default": {
+        "expiry": "87600h"
+        },
+        "profiles": {
+        "iam": {
+            "usages": [
+            "signing",
+            "key encipherment",
+            "server auth",
+            "client auth"
+            ],
+            "expiry": "876000h"
+        }
+        } 
+    }
+} 
+EOF
+```
+
+```shell
+$ tee ca-csr.json << EOF 
+{
+    "CN": "iam-ca",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names":[
+        {
+            "C": "CN",
+            "ST": "BeiJing",
+            "L": "BeiJing",
+            "O": "marmotedu",
+            "OU": "iam"
+        }
+    ],
+    "ca": {
+        "expiry": "876000h"
+    }
+}
+EOF
+    
+```
+
+```shell
+tee iam-apiserver-csr.json <<EOF
+  "CN": "iam-apiserver",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+"names": [ {
+      "C": "CN",
+      "ST": "BeiJing",
+      "L": "BeiJing",
+      "O": "marmotedu",
+      "OU": "iam-apiserver"
+} ],
+  "hosts": [
+    "127.0.0.1",
+    "localhost",
+    "iam.api.marmotedu.com"
+] }
+EOF
+```
+
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJpYW0uYXBpLm1hcm1vdGVkdS5jb20iLCJleHAiOjE2NTQ5MjQyNTgsImlkZW50aXR5IjoiYWRtaW4iLCJpc3MiOiJpYW0tYXBpc2VydmVyIiwib3JpZ19pYXQiOjE2NTQ4Mzc4NTgsInN1YiI6ImFkbWluIn0.NB4jJIfet4lfvfJN6KRwQu56VFajxvgS4cDI9BTfRso
+
+'{"password":"User@2021","metadata":{"name":"colin"},"nickname":"colin","email":"colin@foxmail.com","phone":"1812884xxxx"}'
+
+
+```shell
+ curl -s -XPOST -H'Content-Type: application/json' -H'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJpYW0uYXBpLm1hcm1vdGVkdS5jb20iLCJleHAiOjE2NTQ5MjQyNTgsImlkZW50aXR5IjoiYWRtaW4iLCJpc3MiOiJpYW0tYXBpc2VydmVyIiwib3JpZ19pYXQiOjE2NTQ4Mzc4NTgsInN1YiI6ImFkbWluIn0.NB4jJIfet4lfvfJN6KRwQu56VFajxvgS4cDI9BTfRso' -d '{"password":"User@2021","metadata":{"name":"colin"},"nickname":"colin","email":"colin@foxmail.com","phone":"1812884xxxx"}' http://127.0.0.1:8080/v1/users
+
+  curl -s -XGET -H'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJpYW0uYXBpLm1hcm1vdGVkdS5jb20iLCJleHAiOjE2NTQ5MjQyNTgsImlkZW50aXR5IjoiYWRtaW4iLCJpc3MiOiJpYW0tYXBpc2VydmVyIiwib3JpZ19pYXQiOjE2NTQ4Mzc4NTgsInN1YiI6ImFkbWluIn0.NB4jJIfet4lfvfJN6KRwQu56VFajxvgS4cDI9BTfRso' 'http://127.0.0.1:8080/v1/users?offset=0&limit=10'
+```
+
+```shell
+{
+"CN": "admin",
+"key": {
+  "algo": "rsa",
+  "size": 2048
+},
+"names": [ {
+} ],
+"C": "CN",
+"ST": "BeiJing",
+"L": "BeiJing",
+"O": "marmotedu",
+"OU": "iamctl"
+"hosts": []
+}
+```
+
+cfssl gencert -ca=${IAM_CONFIG_DIR}/cert/ca.pem -ca-key=${IAM_CONFIG_DIR}/cert/ca-key.pem  -config=${IAM_CONFIG_DIR}/cert/ca-config.json -profile=iam admin-csr.json | cfssljson -bare admin
+
+
 
 # 二、规范设计\
 >目录规范、日志规范、错误码规范、Commit规范
