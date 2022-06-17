@@ -1,7 +1,76 @@
+[TOC]
 
-## 看圣经遇到的一个奇怪问题： defer修饰的方法到底什么时候执行？
+# Go Module 那些道道
+
+## 如何升级修改版本
+
+- **查看版本**： `o list -m -versions github.com/sirupsen/logrus`
+- **修改版本**：
+  - 方法1： 以在项目的 module 根目录下，执行带有版本号的 go get 命令：`go get github.com/sirupsen/logrus@v1.7.0`
+  - 方法2： 修改go.mod文件，然后tidy一下：
+    - `go mod edit -require=github.com/sirupsen/logrus@v1.7.0`
+    - `go mod tidy`
 
 
+### 如何添加主版本号大于1的依赖（在代码中import）
+在 Go Module 构建模式下，当依赖的主版本号为 0 或 1 的时候，我们在 Go 源码中导入依赖包，**不需要在包的导入路径上增加版本号**，也就是：
+
+```go
+import github.com/user/repo/v0 等价于 import github.com/user/repo
+import github.com/user/repo/v1 等价于 import github.com/user/repo
+```
+
+- 如果新旧版本的包使用相同的导入路径，那么新包与旧包是兼容的。 反过来说，如果不兼容，那剧需要采用不同的导入路径。
+
+
+如果引入的主版本大于1的依赖（比如v2.0.0），那么就不能直接使用`github.com/user/repo`,因为这是默认0/1，这个与2是不兼容的。 需要向下面这样导入：
+```go
+import github.com/user/repo/v2/xxx
+```
+ - 也就是在声明它的导入路径的基础上，加上版本号信息。
+ - 然后要从新下载最新的：`go get github.com/go-redis/redis/v7`
+
+### 升级依赖版本到一个不兼容版本
+
+跟上面类似，修改版本号，然后重新下载。
+```go
+
+import (
+  _ "github.com/go-redis/redis/v8"
+  "github.com/google/uuid"
+  "github.com/sirupsen/logrus"
+)
+
+//
+$go get github.com/go-redis/redis/v8
+```
+
+### 移除一个依赖
+
+- 在业务代码中删除依赖后，直接build不会删除不用的依赖，因为如果源码满足成功构建的条件，go build 命令是不会“多管闲事”地清理 go.mod 中多余的依赖项的。
+- 运行下 `go mod tidy`就行， go mod tidy 会自动分析源码依赖，而且将不再使用的依赖从 go.mod 和 go.sum 中移除。
+
+
+### 特殊情况：使用vendor
+
+**什么情况下还需要用vendor？**
+
+
+- 在一些不方便访问外部网络，并且对 Go 应用构建性能敏感的环境，比如在一些内部的持续集成或持续交付环境（CI/CD）中，使用 vendor 机制可以实现与 Go Module 等价的构建。
+
+
+**怎么用mod模式下用vendor？**
+
+- Go Module 构建模式下，我们再也无需手动维护 vendor 目录下的依赖包了，Go 提供了可以快速建立和更新 vendor 的命令：
+  - `go mod vendor` 项目根目录，创建vendor目录。
+    - go mod vendor 命令在 vendor 目录下，创建了一份这个项目的依赖包的副本
+    - 并且通过 vendor/modules.txt 记录了 vendor 下的 module 以及版本。
+- 如果我们要基于 vendor 构建，而不是基于本地缓存的 Go Module 构建，我们需要在 go build 后面加上 `-mod=vendor` 参数。
+- 在 Go 1.14 及以后版本中，如果 Go 项目的顶层目录下存在 vendor 目录，那么 go build **默认也会优先基于 vendor 构建**，除非你给 go build 传入 -mod=mod 的参数。
+
+
+# 看go语言圣经的疑惑
+##  defer修饰的方法到底什么时候执行？
 
 ### 看了下csdn有小伙伴遇到一样的疑问
 
