@@ -138,3 +138,28 @@ chmod +x ./test.sh  #使脚本具有执行权限
    单对中括号，直接报错：
   
 
+
+# 案例实践
+
+## 批量解压、分类归档压缩
+
+```shell
+#!/bin/sh
+# 1. 批量解压
+for zipfile in `ls tauriel关键词下载-*.zip`
+do
+  unzip $zipfile -d temp
+done
+
+for file in `ls temp/download_cpc_info_*.csv`
+do
+  filename=$(basename "$file")
+  # 名称download_cpc_info_22525608_1.csv 通过‘_’来分隔，如果想要取账号，就是取第4项
+  accountId=`echo $filename | cut -d '_' -f 4`
+  echo "Input File: $file"
+  echo "Input FileName: $filename"
+  echo "Input accountId: $accountId"
+  zip $accountId.zip $file
+done
+
+```
