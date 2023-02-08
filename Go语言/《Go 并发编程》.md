@@ -29,7 +29,7 @@ context 包中提供的 context.Background、context.TODO、context.WithDeadline
 
 
 
-**背景知识**：wwaitgroup和channel
+**背景知识**：waitgroup和channel
 
 WaitGroup 和信道(channel)是常见的 2 种并发控制的方式。
 
