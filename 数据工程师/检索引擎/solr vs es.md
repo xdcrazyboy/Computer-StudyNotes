@@ -98,6 +98,15 @@ Solr 在传统的搜索应用中表现好于 Elasticsearch，但在处理实时�
 Solr 是传统搜索应用的有力解决方案，但 Elasticsearch 更适用于新兴的实时搜索应用。
 
 ## 相同点
+- https://blog.csdn.net/qq_41965731/article/details/90266636
+
+
+**相关性打分**：
+相关度自然打分（权重越高分越高）：
+- - tf（Term Frequency）越高、权重越高
+df （Document Frequency）越高、权重越低
+- 人为影响分数：设置Boost值（加权值）
+
 
 ## 不同点
 
