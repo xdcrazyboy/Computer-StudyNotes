@@ -106,7 +106,7 @@ jvm_args  : -Xms1024m -Xmx15000m -XX:MaxPermSize=2048m -Xdebug -Xrunjdwp:transpo
 
 
 4. **CPU** 
-5. 
+  
 top后键入P看一下谁占用最大
 ```
 # top -d 5
@@ -123,6 +123,39 @@ top后键入P看一下谁占用最大
            - taskkill -f -pid 14128
 
         ```
+## 怎么查看日志
+
+### tail
+
+`tail -300f test.log` 循环实时查看最后1000行记录(最常用的)
+
+`tail -fn 1000 test.log | grep '关键字'`
+
+`tail -n 4700 aa.log |more -1000 可以进行多屏显示(ctrl + f 或者 空格键可以快捷键)`
+
+
+### sed
+这个命令可以查找日志文件特定的一段 , 根据时间的一个范围查询，可以按照行号和时间范围查询. 
+
+- 按照行号
+`sed -n '5,10p' filename` 这样你就可以只查看文件的第5行到第10行。 
+
+- 按照时间段
+  `sed -n '/2014-12-17 16:17:20/,/2014-12-17 16:17:36/p' test.log`
+
+### less
+一般流程是这样的：
+```
+ less log.log
+shift + G 命令到文件尾部 然后输入 ?加上你要搜索的关键字例如 ?1213 按 n 向上查找关键字
+shift+n 反向查找关键字 less与more类似，使用less可以随意浏览文件，而more仅能向前移动，不能向后移动，而且 less 在查 看之前不会加载整个文件。
+less log2013.log 查看文件
+ps -ef | less ps查看进程信息并通过less分页显示
+history | less 查看命令历史使用记录并通过less分页显示
+less log2013.log log2014.log 浏览多个文件
+```
+
+**`!!` 重复执行上一个命令**
 
 ## 字符串操作
 
@@ -133,3 +166,8 @@ find .|xargs grep -ri "showIdeaDetailList.action"
 
 ## 网络，文件
 **下载文件**：  `curl http://www.linux.com >> linux.html`
+
+
+# 基础核心概念
+
+
