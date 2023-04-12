@@ -1,15 +1,15 @@
 # BOBO学习Flink
 
-## 学习资料-巨人肩膀
+# 学习资料-巨人肩膀
 
-### 文档
+## 文档
 - 官方文档（中文）：https://flink.apache.org/zh/
 
-### 书籍
+## 书籍
 - 《基于Apache Flink的流处理》
 - 《StreamingSystems》 英文
 
-### 视频教程
+## 视频教程
 1. https://github.com/flink-china/flink-training-course
 2. 拉勾教育-flink教程
 
@@ -23,7 +23,20 @@
 - 在启用高可用选项的情况下，它不存在单点失效问题。
   >事实证明，Flink 已经可以扩展到数千核心，其状态可以达到 TB 级别，且仍能保持高吞吐、低延迟的特性。
 
+### 流式处理框架对比：Storm、Spark Streaming
 
+- [美团基于 Flink 的实时数仓建设实践](https://tech.meituan.com/2018/10/18/meishi-data-flink.html)
+- [流计算框架 Flink 与 Storm 的性能对比](https://tech.meituan.com/2017/11/17/flink-benchmark.html)
+
+**[美团实时计算技术选型对比](https://tech.meituan.com/2021/08/26/data-warehouse-in-meituan-waimai.html)**
+![](../../img/Flink学习入门/Flink学习入门_2023-04-01-00-52.png)
+
+
+
+以下实时计算场景建议考虑使用 Flink 框架进行计算： 
++ 要求消息投递语义为 Exactly Once 的场景； 
++ 数据量较大，要求高吞吐低延迟的场景； 
++ 需要进行状态管理或窗口统计的场
 
 ## 基础特性
 **Flink自身特点：**
