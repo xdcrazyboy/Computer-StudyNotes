@@ -336,6 +336,22 @@ ETL 作业通常会周期性地触发，将数据从事务型数据库拷贝到�
 由于 Flink 是为了提升流处理而创建的平台，所以它适用于各种需要非常低延迟（微秒到毫秒级）的实时数据处理场景，比如实时日志报表分析。而且 Flink 用流处理去模拟批处理的思想，比 Spark 用批处理去模拟流处理的思想扩展性更好，所以我相信将来 Flink 会发展的越来越好，生态和社区各方面追上 Spark。
 
 #### Storm
+Storm是一个没有批处理功能的数据流处理器。
+
+Flink的并行任务的接口有点类似Storm的bolts。
+
+他们的目标都是通过流水线数据传输实现低延迟流处理。 Flink提供了更高级别的API， 比如DataStream API提供可Map/GroupBy/Window和Join等功能， 而不是使用一个或者多个读取器和收集器实现螺栓（bolts）的功能. 使用Storm时，必须手动实现许多此功能。
+
+
+处理语义的区别。
+
+- Storm保证at-least-once
+- Flink保证exactly-once.
+
+提供这些保证的实现也不同， Storm使用记录级别的确认，而flink使用Chandy-Lamport算法的变体，简而言之，数据源会定期标记注入数据流。
+
+flink的checkpoint方法比Storm的记录级确认更轻量级。
+
 
 # 架构
 
@@ -427,3 +443,16 @@ Flink会周期性地为应用状态生成检查点，一旦发生故障，Flink�
 ## 核心窗口API
 
 类型，自定义窗口操作，核心结构（分配器、触发器和移除器）
+
+
+### Window Assigner
+
+
+### Window Trigger
+
+
+
+### Window Evictors
+
+
+### 
