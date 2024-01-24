@@ -234,3 +234,26 @@ git reset --soft HEAD^
 ```
 - 这样就成功的撤销了你的commit, 注意，仅仅是撤回commit操作，您写的代码仍然保留。
 - HEAD^的意思是上一个版本，也可以写成HEAD~1, 如果你进行了2次commit，想都撤回，可以使用HE
+
+
+## 如何迁移代码库
+
+1. 在 GitHub 建立新仓库，空的
+2. 克隆 Coding 上的项目到本地。
+   - 本地执行
+```s
+git clone https://git.coding.net/wenyuan/blog.git --bare
+```
+
+3. 将克隆下来的仓库推送到GitHub
+   1. 使用新仓库页面提供的仓库地址(web URL)，推送所有的分支和对象
+    ```s
+    cd blog.git
+
+    git push https://github.com/wenyuan/blog.git --all  
+    ```
+4. 完成后，再执行推送所有的Tags
+
+```s
+git push https://github.com/wenyuan/blog.git --tags
+```
